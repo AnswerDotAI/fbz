@@ -18,7 +18,7 @@ fn fbz(format: &str, input: &Path) -> Command { fbz_with_threads(format, input, 
 
 fn fbz_with_threads(format: &str, input: &Path, threads: usize) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_fbz"));
-    command.args(["-z", "--format", format, "-q", "-P", &threads.to_string(), "-o", "-"]).arg(input).stdout(Stdio::null()).stderr(Stdio::null());
+    command.args(["c", "--format", format, "-q", "-P", &threads.to_string(), "-o", "-"]).arg(input).stdout(Stdio::null()).stderr(Stdio::null());
     command
 }
 
@@ -85,7 +85,7 @@ fn fbz_zip(directory: &Path, output: &str, inputs: &[PathBuf]) -> Command { fbz_
 
 fn fbz_zip_with_threads(directory: &Path, output: &str, inputs: &[PathBuf], threads: usize) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_fbz"));
-    command.current_dir(directory).args(["-z", "--format", "zip", "-q", "-P", &threads.to_string(), "-o", output]);
+    command.current_dir(directory).args(["c", "--format", "zip", "-q", "-P", &threads.to_string(), "-o", output]);
     command.args(inputs);
     command
 }
@@ -126,7 +126,7 @@ fn compare_zip(shape: ZipShape) {
 
 fn fbz_tar(directory: &Path, format: &str, output: &str) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_fbz"));
-    command.current_dir(directory).args(["-z", "--format", format, "-q", "-o", output, "payload.xml"]);
+    command.current_dir(directory).args(["c", "--format", format, "-q", "-o", output, "payload.xml"]);
     command
 }
 

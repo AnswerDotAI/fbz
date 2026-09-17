@@ -31,7 +31,7 @@ fn fbz_command(input: &std::path::Path) -> Command { fbz_command_with_threads(in
 
 fn fbz_command_with_threads(input: &std::path::Path, threads: usize) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_fbz"));
-    command.args(["--test", "-q", "-P", &threads.to_string()]).arg(input);
+    command.args(["test", "-q", "-P", &threads.to_string()]).arg(input);
     command
 }
 

@@ -68,7 +68,21 @@ cargo add fbz
 
 ## CLI
 
-Decoding is the default operation. `.bz2`, `.bzip2`, `.gz`, `.gzip`, and `.lz4` select their corresponding decoder and are removed from the output name. Compressed tar names—`.tar.bz2`, `.tar.bzip2`, `.tbz`, `.tbz2`, `.tar.gz`, `.tar.gzip`, `.tgz`, and `.tar.lz4`—and `.zip` automatically extract into the current directory or `-C/--output-dir`. `-x/--extract` forces archive extraction for stdin or an unusual filename; an explicit `-o/--output` instead writes a decoded tar stream, but is invalid for ZIP because ZIP has no single decoded byte stream. For stdin and unrecognised extensions, bzip2, gzip, LZ4, or ZIP magic selects the format. Other non-archive input names gain `.out`.
+| Command | Alias | Operation |
+|---|---|---|
+| `compress` | `c` | Compress files or create tar/ZIP archives |
+| `decompress` | `d` | Decompress files or extract archives |
+| `list` | `l` | Validate and list codec structure or ZIP entries |
+| `test` | | Validate without writing output |
+| `index` | | Build bzip2 seek indexes |
+
+A path without a command defaults to decompression: `fbz file.gz` is equivalent to `fbz d file.gz`. The first positional argument selects a command only if it exactly matches a command name or alias; option values do not count. For a file named `c` or `test`, use `./c` or an explicit command such as `fbz d test`. Command recognition never depends on which files exist.
+
+Use `fbz --help` for the command overview and `fbz c --help` for compression and filtering options. Threads (`-P`), memory limit, and quiet (`-q`) are shared options and can appear before or after the command. Other options belong after their command, or accompany a bare decompression path.
+
+### Decompression
+
+`.bz2`, `.bzip2`, `.gz`, `.gzip`, and `.lz4` select their corresponding decoder and are removed from the output name. Compressed tar names—`.tar.bz2`, `.tar.bzip2`, `.tbz`, `.tbz2`, `.tar.gz`, `.tar.gzip`, `.tgz`, and `.tar.lz4`—and `.zip` automatically extract into the current directory or `-C/--output-dir`. `-x/--extract` forces archive extraction for stdin or an unusual filename; an explicit `-o/--output` instead writes a decoded tar stream, but is invalid for ZIP because ZIP has no single decoded byte stream. For stdin and unrecognised extensions, bzip2, gzip, LZ4, or ZIP magic selects the format. Other non-archive input names gain `.out`.
 
 ```bash
 fbz dump.xml.bz2                   # write dump.xml
@@ -78,23 +92,46 @@ fbz source.tar.gz                  # extract into the current directory
 fbz source.tar.lz4 -C unpacked     # stream-decode and extract
 fbz source.tbz2 -C unpacked        # extract into unpacked/
 fbz dataset.zip -C unpacked        # extract ZIP entries adaptively in parallel
-fbz --extract -C unpacked -        # extract tar or ZIP data from stdin
+fbz d --extract -C unpacked -      # extract tar or ZIP data from stdin
 fbz source.tgz -o source.tar       # decode without extracting
 fbz dump.xml.bz2 -o result.xml     # choose the decoded output path
 fbz dump.xml.bz2 -o -              # write decoded bytes to stdout
 ```
 
-`-z/--compress` reverses the operation. An output suffix selects the format; when `-o` is omitted, `--format` selects it and fbz appends the conventional suffix. Standalone streams accept stdin and can write stdout. Tar and ZIP creation accept multiple filesystem inputs and stream output without an intermediate tar or plaintext file.
+### Compression
+
+`compress` (or `c`) compresses files. An output suffix selects the format; when `-o` is omitted, `--format` selects it and fbz appends the conventional suffix. Standalone streams accept stdin and can write stdout. Tar and ZIP creation accept multiple filesystem inputs and stream output without an intermediate tar or plaintext file.
 
 ```bash
-fbz -z --format bzip2 dump.xml       # write dump.xml.bz2
-fbz -z events.json -o events.json.gz # infer gzip from the output
-fbz -z data -o data.lz4              # independent-block LZ4 frame
-fbz -z src docs -o source.tar.gz     # stream tar directly into gzip
-fbz -z src docs -o source.tar.bz2    # stream tar directly into bzip2
-fbz -z src docs -o source.zip        # adaptive parallel ZIP creation
-fbz -z --format gzip -o - < events   # write one gzip member to stdout
+fbz c --format bzip2 dump.xml       # write dump.xml.bz2
+fbz c events.json -o events.json.gz # infer gzip from the output
+fbz c data -o data.lz4              # independent-block LZ4 frame
+fbz c src docs -o source.tar.gz     # stream tar directly into gzip
+fbz c src docs -o source.tar.bz2    # stream tar directly into bzip2
+fbz c src docs -o source.zip        # adaptive parallel ZIP creation
+fbz c --format gzip -o - - < events # write one gzip member to stdout
 ```
+
+### Selecting archive contents
+
+Tar and ZIP creation include hidden and ignored files by default. Add `-i/--ignore` to honour `.gitignore`, `.ignore`, `.rgignore`, and Git's other ignore rules without hiding dotfiles. Exclude Git metadata explicitly with `-E .git`.
+
+```bash
+fbz c -i project -o source.zip -E .git
+fbz c project -o code.tar.gz -e py -e ipynb -E tests
+fbz c project -o docs.zip --include 'docs/**' --include README.md
+fbz c -ni project -o source.zip -E .git
+```
+
+`-E/--exclude GLOB`, `--include GLOB`, and `-e/--extension EXT` are repeatable. Repeated includes or extensions match any supplied value; combining includes and extensions requires both to match. Excludes always win, independent of argument order. Includes do not override ignore rules.
+
+Globs without `/` match names at any depth. Globs containing `/` match paths relative to each input directory. `*` matches within a path component; `**` spans directories. Excluding a directory prunes its entire subtree, while includes never block traversal to matching descendants. Matching is case-sensitive. Quote globs to prevent shell expansion.
+
+Symlinks are stored as links, including dangling and explicitly named links. Selected entries retain their required parent directories. With no positive filters, empty directories are kept. Special entries such as sockets, FIFOs, and devices are rejected rather than silently omitted. The output archive itself is excluded if it is inside an input directory. No matches is an error rather than an empty archive.
+
+`-n/--dry-run` prints the selected archive entry names to stdout and an entry-count summary to stderr, without creating or changing the archive or output directory. `--quiet` suppresses the summary. These five options apply only to tar/ZIP creation; other modes reject them.
+
+### Multiple inputs and inspection
 
 Multiple inputs are processed in order, with parallelism applied inside each compressed stream. `-C/--output-dir` collects decoded files and is the extraction root for archives:
 
@@ -105,18 +142,18 @@ fbz backups/*.tgz -C restored
 fbz datasets/*.zip -C restored
 ```
 
-Validation and inspection remain flags rather than subcommands:
+Validation and inspection use their own commands:
 
 ```bash
-fbz --test dump.xml.bz2          # fully decode and validate, writing nothing
-fbz --index dump.xml.bz2         # write dump.xml.bz2.fbz2i (bzip2 only)
-fbz --list events.json.gz        # print the validated member/block layout
-fbz --list events.json.lz4       # print the validated frame/block layout
-fbz --list dataset.zip           # print the validated entry layout
-fbz --list --json dump.xml.bz2   # emit the complete layout as JSON
+fbz test dump.xml.bz2          # fully decode and validate, writing nothing
+fbz index dump.xml.bz2         # write dump.xml.bz2.fbz2i (bzip2 only)
+fbz l events.json.gz           # print the validated member/block layout
+fbz l events.json.lz4          # print the validated frame/block layout
+fbz l dataset.zip             # print the validated entry layout
+fbz l --json dump.xml.bz2      # emit the complete layout as JSON
 ```
 
-`--test`, `--index`, `--list`, and explicit `--extract` are mutually exclusive. Human-readable `--list` output labels each input when given multiple files; JSON output is one object for one input and an array for multiple inputs.
+Human-readable `list` output labels each input when given multiple files; JSON output is one object for one input and an array for multiple inputs. The old `-z/--compress`, `--list`, `--test`, and `--index` flags are no longer accepted.
 
 ## Python
 
@@ -219,7 +256,7 @@ fn main() -> fbz::Result<()> {
 
 `compress` returns a `Vec<u8>`, while `Encoder<W>` implements `Write` for producers that generate data incrementally. `EncodeOptions` controls worker count, memory budget, and compression level. Gzip produces one standard member, LZ4 produces a standard independent-block frame, and bzip2 produces an ordinary `BZh1`–`BZh9` stream; none requires an fbz decoder.
 
-`zip::create_to_writer` creates stored/DEFLATE ZIP and Zip64 archives from `zip::PathInput` values. For tar composition, feed a `gzip::Encoder`, `lz4::Encoder`, or `Bzip2Encoder` directly to a streaming `tar::Builder`, which is the same composition used by the CLI.
+`zip::create_to_writer` creates stored/DEFLATE ZIP and Zip64 archives from an exact list of `zip::PathInput` entries. Directory entries store only the directory itself; callers must supply its selected descendants explicitly. For tar composition, feed a `gzip::Encoder`, `lz4::Encoder`, or `Bzip2Encoder` directly to a streaming `tar::Builder`, which is the same composition used by the CLI.
 
 The in-repo gzip decoder is available separately so callers can choose explicitly:
 

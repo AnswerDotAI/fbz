@@ -21,6 +21,7 @@ const SMALL_WORKING_MEMORY: usize = 8 * 1024 * 1024;
 const SINGLE_ENTRY_PARALLEL: u64 = 16 * 1024 * 1024;
 const MULTI_ENTRY_PARALLEL: u64 = 64 * 1024 * 1024;
 
+/// One archive entry. Directories are stored without recursively adding their contents.
 #[derive(Clone, Debug)]
 pub struct PathInput { pub source: PathBuf, pub archive_path: PathBuf }
 
@@ -91,24 +92,19 @@ fn zip_name(path: &Path, directory: bool) -> Result<String> {
     Ok(name)
 }
 
-fn collect(source: &Path, archive_path: &Path, entries: &mut Vec<Entry>) -> Result<()> {
+fn entry(input: &PathInput) -> Result<Entry> {
+    let PathInput { source, archive_path } = input;
     let metadata = fs::symlink_metadata(source)?;
     let kind = if metadata.file_type().is_symlink() { Kind::Symlink } else if metadata.is_dir() { Kind::Directory } else if metadata.is_file() { Kind::File } else { return Err(invalid(format!("unsupported filesystem entry {}", source.display()))); };
     let size = match kind { Kind::File => metadata.len(), Kind::Symlink => symlink_bytes(source)?.len() as u64, Kind::Directory => 0 };
-    entries.push(Entry {
+    Ok(Entry {
         source: source.to_path_buf(),
         name: zip_name(archive_path, kind == Kind::Directory)?,
         kind,
         size,
         mode: mode(&metadata),
         modified: modified(&metadata),
-    });
-    if kind == Kind::Directory {
-        let mut children = fs::read_dir(source)?.map(|entry| entry.map(|entry| entry.path())).collect::<io::Result<Vec<_>>>()?;
-        children.sort_unstable();
-        for child in children { collect(&child, &archive_path.join(child.file_name().unwrap()), entries)?; }
-    }
-    Ok(())
+    })
 }
 
 struct CountingWriter<W> { inner: W, position: u64 }
@@ -328,10 +324,10 @@ fn finish_archive<W: Write>(output: &mut CountingWriter<W>, central: &[CentralEn
     Ok(())
 }
 
+/// Write exactly the supplied entries; directory contents must be listed explicitly.
 pub fn create_to_writer<W: Write + ?Sized>(inputs: &[PathInput], output: &mut W, options: EncodeOptions) -> Result<EncodeReport> {
     let options = options.validate()?;
-    let mut entries = Vec::new();
-    for input in inputs { collect(&input.source, &input.archive_path, &mut entries)?; }
+    let mut entries = inputs.iter().map(entry).collect::<Result<Vec<_>>>()?;
     entries.sort_unstable_by(|left, right| left.name.cmp(&right.name));
     for pair in entries.windows(2) { if pair[0].name == pair[1].name { return Err(invalid(format!("duplicate ZIP path {}", pair[0].name))); } }
     let input_len = entries.iter().map(|entry| entry.size).sum();

@@ -14,10 +14,11 @@ fn zip_encoder_roundtrips_files_and_directories() {
     fs::create_dir(&source).unwrap();
     fs::write(source.join("small.txt"), b"small contents").unwrap();
     fs::write(source.join("repeated.bin"), b"repeat me".repeat(200_000)).unwrap();
+    fs::write(source.join("not-selected.txt"), b"must not be recursively included").unwrap();
 
     let mut encoded = Vec::new();
     let report = create_to_writer(
-        &[PathInput { source: source.clone(), archive_path: PathBuf::from("bundle") }],
+        &["", "small.txt", "repeated.bin"].map(|name| PathInput { source: source.join(name), archive_path: PathBuf::from("bundle").join(name) }),
         &mut encoded,
         EncodeOptions { threads: 4, memory_limit: 64 * 1024 * 1024, level: Some(6) },
     )

@@ -37,8 +37,9 @@ fn physical_footprint_mib(metrics: &common::ProcessMetrics) -> f64 {
 }
 
 fn validation_command(binary: impl AsRef<OsStr>, path: &Path, threads: usize) -> Command {
-    let mut command = Command::new(binary);
-    command.arg("--test").arg("-P").arg(threads.to_string()).arg(path);
+    let mut command = Command::new(&binary);
+    let operation = if binary.as_ref() == OsStr::new(env!("CARGO_BIN_EXE_fbz")) { "test" } else { "--test" };
+    command.arg(operation).arg("-P").arg(threads.to_string()).arg(path);
     command
 }
 

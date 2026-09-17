@@ -17,7 +17,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use clap::{ArgGroup, Parser, ValueEnum};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
 use fbz::{
     DecodeOptions, DecodeProgress, EncodeOptions, EncodeProgress, Error, Format, Index, OutputSink, Source, WriterSink, build_index_with_progress,
     decode_stream_to_sink_with_progress, decode_to_writer_with_progress, gzip, lz4,
@@ -29,78 +29,185 @@ use tempfile::NamedTempFile;
 #[command(
     version,
     about = "Fast parallel compression and decompression with safe archive handling",
-    long_about = "Parallel compression and decompression for bzip2, gzip, and LZ4, plus streaming compressed-tar and adaptive ZIP creation/extraction. Decoding is the default operation; -z enables compression. Compression format is inferred from the output suffix or selected with --format.",
-    after_help = r#"Examples:
-  fbz dump.xml.bz2              Write dump.xml
-  fbz events.json.gz -o -       Write decoded bytes to stdout
-  fbz events.json.lz4           Write events.json
-  fbz backup.tgz -C restored    Extract into restored/
-  fbz backup.tar.lz4 -C restored Extract a tar-wrapped LZ4 frame
-  fbz dataset.zip -C restored   Extract ZIP entries in parallel
-  fbz -z data -o data.bz2      Compress as parallel bzip2
-  fbz -z data -o data.gz       Compress as one standard gzip member
-  fbz -z data -o data.lz4      Compress as independent LZ4 blocks
-  fbz -z src -o src.tar.gz     Stream tar directly into gzip
-  fbz -z src -o src.zip        Create ZIP with adaptive parallelism
-  fbz --test archive.tar.bz2    Validate without writing output
-  fbz --list --json data.gz     Show the validated layout as JSON"#,
-    group(ArgGroup::new("mode").args(["test", "index", "list", "extract", "compress"]))
+    long_about = "Parallel compression and decompression for bzip2, gzip, and LZ4, plus compressed-tar and ZIP archives. A path without a command defaults to decompression.",
+    after_help = r#"Run fbz <command> -h for its full options (e.g. fbz c -h, fbz d -h).
+
+Examples:
+  fbz dump.xml.bz2                       Write dump.xml (implicit decompression)
+  fbz d backup.tgz -C restored           Extract into restored/
+  fbz c src docs -o source.zip -i -E .git Create a filtered archive
+  fbz c src -o src.tar.gz -ni            Preview archive contents
+  fbz l --json data.gz                   Show the validated layout as JSON
+  fbz test archive.tar.bz2               Validate without writing output
+  fbz index dump.xml.bz2                 Build a bzip2 seek index"#
 )]
 struct Cli {
-    /// Input files, or - where the selected operation accepts a byte stream.
-    #[arg(required = true, num_args = 1..)]
-    inputs: Vec<String>,
-    /// Fully decode and validate checksums without writing output.
-    #[arg(long)]
-    test: bool,
-    /// Build validated, source-bound .fbz2i indexes for bzip2 inputs.
-    #[arg(long)]
-    index: bool,
-    /// Validate and show bzip2 streams/blocks, gzip members/blocks, LZ4 frames/blocks, or ZIP entries.
-    #[arg(long)]
-    list: bool,
-    /// Extract a tar or ZIP archive; automatic for recognised archive suffixes.
-    #[arg(short = 'x', long)]
-    extract: bool,
-    /// Compress rather than decompress.
-    #[arg(short = 'z', long)]
-    compress: bool,
-    /// Compression format; inferred from -o when possible.
-    #[arg(long, value_enum, requires = "compress")]
-    format: Option<CompressionFormat>,
-    /// Compression level from 1 (fastest) through 9 (smallest); format-specific default.
-    #[arg(short = 'l', long, requires = "compress")]
-    level: Option<u8>,
-    /// Write to PATH or stdout; tar and ZIP creation accept multiple inputs.
-    #[arg(short, long, conflicts_with_all = ["test", "list", "extract", "output_dir"])]
-    output: Option<PathBuf>,
-    /// Put generated files or extracted archive entries in DIRECTORY.
-    #[arg(short = 'C', long = "output-dir", conflicts_with_all = ["test", "index", "list", "output"])]
-    output_dir: Option<PathBuf>,
+    #[command(flatten)]
+    common: Common,
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Args)]
+struct Common {
     /// Compression or decompression workers; 0 selects automatically.
-    #[arg(short = 'P', long, default_value_t = 0)]
+    #[arg(short = 'P', long, default_value_t = 0, global = true)]
     threads: usize,
     /// Maximum in-flight codec memory budget; accepts binary size suffixes.
-    #[arg(long, default_value = "1G", value_parser = parse_size)]
+    #[arg(long, default_value = "1G", value_parser = parse_size, global = true)]
     memory_limit: usize,
+    /// Suppress progress, skip notices, and the dry-run summary.
+    #[arg(short, long, global = true)]
+    quiet: bool,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Compress files or create a tar/ZIP archive.
+    /// Output (-o), format, level (-l), filters (-i/-E/-e), dry-run (-n)
+    #[command(visible_alias = "c", verbatim_doc_comment)]
+    Compress(CompressArgs),
+    /// Decompress files or extract archives; also the default for bare paths.
+    /// Output (-o/-C), extraction (-x), overwrite, removal, size limit
+    #[command(visible_alias = "d", verbatim_doc_comment)]
+    Decompress(DecompressArgs),
+    /// Validate and list codec structure or ZIP entries.
+    /// JSON (--json), size limit (--max-output)
+    #[command(visible_alias = "l", verbatim_doc_comment)]
+    List(ListArgs),
+    /// Fully decode and validate checksums without writing output.
+    /// Size limit (--max-output)
+    #[command(verbatim_doc_comment)]
+    Test(TestArgs),
+    /// Build validated, source-bound .fbz2i indexes for bzip2 inputs.
+    /// Output (-o), overwrite, skip existing, size limit
+    #[command(verbatim_doc_comment)]
+    Index(IndexArgs),
+}
+
+#[derive(Args)]
+struct WriteArgs {
+    /// Write to PATH or stdout (-).
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+    /// Replace existing output files or archive entries.
+    #[arg(short, long, conflicts_with = "skip_existing")]
+    force: bool,
+    /// Skip existing output files; unavailable during extraction.
+    #[arg(long)]
+    skip_existing: bool,
+}
+
+#[derive(Args)]
+struct CompressArgs {
+    /// Input files, or - for a standalone byte stream.
+    #[arg(required = true, num_args = 1..)]
+    inputs: Vec<String>,
+    #[command(flatten)]
+    write: WriteArgs,
+    /// Compression format; inferred from -o when possible.
+    #[arg(long, value_enum)]
+    format: Option<CompressionFormat>,
+    /// Compression level from 1 (fastest) through 9 (smallest); format-specific default.
+    #[arg(short = 'l', long)]
+    level: Option<u8>,
+    /// Put generated files in DIRECTORY.
+    #[arg(short = 'C', long = "output-dir", conflicts_with = "output")]
+    output_dir: Option<PathBuf>,
+    /// Remove inputs after successful standalone compression; not archive creation.
+    #[arg(long = "rm")]
+    remove_input: bool,
+    #[command(flatten)]
+    filters: archive_create::Filters,
+}
+
+#[derive(Args)]
+struct DecompressArgs {
+    /// Input files, or - for stdin.
+    #[arg(required = true, num_args = 1..)]
+    inputs: Vec<String>,
+    #[command(flatten)]
+    write: WriteArgs,
+    /// Put generated files or extracted archive entries in DIRECTORY.
+    #[arg(short = 'C', long = "output-dir", conflicts_with = "output")]
+    output_dir: Option<PathBuf>,
+    /// Force tar or ZIP extraction for stdin or an unusual filename.
+    #[arg(short = 'x', long, conflicts_with_all = ["output", "skip_existing"])]
+    extract: bool,
+    /// Remove inputs after successful decoding or extraction.
+    #[arg(long = "rm")]
+    remove_input: bool,
     /// Maximum decoded bytes per input; accepts binary size suffixes.
     #[arg(long, value_parser = parse_size)]
     max_output: Option<usize>,
-    /// Replace existing output files or archive entries.
-    #[arg(short, long, conflicts_with_all = ["test", "list", "skip_existing"])]
-    force: bool,
-    /// Skip existing output files; unavailable during extraction.
-    #[arg(long, conflicts_with_all = ["test", "list", "extract", "force"])]
-    skip_existing: bool,
-    /// Remove inputs after standalone compression, decoding, or extraction; not archive creation.
-    #[arg(long = "rm", conflicts_with_all = ["test", "index", "list"])]
-    remove_input: bool,
-    /// Suppress progress and skip notices.
-    #[arg(short, long)]
-    quiet: bool,
-    /// Emit `--list` output as JSON.
-    #[arg(long, requires = "list")]
+}
+
+#[derive(Args)]
+struct ListArgs {
+    /// Input files to validate and list.
+    #[arg(required = true, num_args = 1..)]
+    inputs: Vec<String>,
+    /// Emit the validated layout as JSON.
+    #[arg(long)]
     json: bool,
+    /// Maximum decoded bytes per input; accepts binary size suffixes.
+    #[arg(long, value_parser = parse_size)]
+    max_output: Option<usize>,
+}
+
+#[derive(Args)]
+struct TestArgs {
+    /// Input files, or - for stdin.
+    #[arg(required = true, num_args = 1..)]
+    inputs: Vec<String>,
+    /// Maximum decoded bytes per input; accepts binary size suffixes.
+    #[arg(long, value_parser = parse_size)]
+    max_output: Option<usize>,
+}
+
+#[derive(Args)]
+struct IndexArgs {
+    /// Bzip2 input files.
+    #[arg(required = true, num_args = 1..)]
+    inputs: Vec<String>,
+    #[command(flatten)]
+    write: WriteArgs,
+    /// Maximum decoded bytes per input; accepts binary size suffixes.
+    #[arg(long, value_parser = parse_size)]
+    max_output: Option<usize>,
+}
+
+// Find the first positional without mistaking an option value for a command.
+// Clap's schema is the source of truth for both aliases and value-taking options.
+fn cli_args() -> Vec<std::ffi::OsString> {
+    let mut args: Vec<_> = std::env::args_os().collect();
+    let mut schema = Cli::command();
+    schema.build();
+    let flags: Vec<_> = schema.get_arguments().chain(schema.get_subcommands().flat_map(|cmd| cmd.get_arguments())).collect();
+    let mut skip_value = false;
+    let mut implicit = args.len() > 1;
+    for arg in &args[1..] {
+        if skip_value { skip_value = false; continue; }
+        let text = arg.to_string_lossy();
+        if matches!(text.as_ref(), "-h" | "--help" | "-V" | "--version") { implicit = false; break; }
+        if text == "--" { break; }
+        if let Some(long) = text.strip_prefix("--") {
+            skip_value = flags.iter().any(|flag| flag.get_long() == Some(long) && flag.get_action().takes_values());
+        } else if let Some(short) = text.strip_prefix('-').filter(|short| !short.is_empty()) {
+            let mut chars = short.chars().peekable();
+            while let Some(ch) = chars.next() {
+                if flags.iter().any(|flag| flag.get_short() == Some(ch) && flag.get_action().takes_values()) {
+                    skip_value = chars.peek().is_none();
+                    break;
+                }
+            }
+        } else {
+            implicit = !schema.get_subcommands().any(|cmd| cmd.get_name() == text || cmd.get_all_aliases().any(|alias| alias == text));
+            break;
+        }
+    }
+    if implicit { args.insert(1, "decompress".into()); }
+    args
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -115,7 +222,7 @@ enum CompressionFormat {
 }
 
 fn main() -> ExitCode {
-    match run(Cli::parse()) {
+    match run(Cli::parse_from(cli_args())) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("fbz: {error}");
@@ -125,33 +232,26 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> fbz::Result<()> {
-    validate_cli(&cli)?;
-    if cli.compress { return run_compress(&cli); }
-    let options = DecodeOptions { threads: cli.threads, memory_limit: cli.memory_limit, ..DecodeOptions::default() };
-    if cli.test {
-        for input in &cli.inputs { test_input(input, options, cli.max_output, cli.quiet)?; }
-        return Ok(());
+    let common = &cli.common;
+    let options = DecodeOptions { threads: common.threads, memory_limit: common.memory_limit, ..DecodeOptions::default() };
+    match &cli.command {
+        Command::Compress(args) => run_compress(args, common),
+        Command::Decompress(args) => run_decode(args, options, common.quiet),
+        Command::List(args) => run_list(args, options, common.quiet),
+        Command::Index(args) => run_index(args, options, common.quiet),
+        Command::Test(args) => {
+            validate_inputs(&args.inputs, true)?;
+            for input in &args.inputs { test_input(input, options, args.max_output, common.quiet)?; }
+            Ok(())
+        }
     }
-    if cli.index { return run_index(&cli, options); }
-    if cli.list { return run_list(&cli, options); }
-    run_decode(&cli, options)
 }
 
-fn validate_cli(cli: &Cli) -> fbz::Result<()> {
-    let selected_format = if cli.compress { Some(compression_format(cli)?) } else { None };
-    let archive_compression =
-        matches!(selected_format, Some(CompressionFormat::TarBzip2 | CompressionFormat::TarGzip | CompressionFormat::TarLz4 | CompressionFormat::Zip));
-    if cli.output.is_some() && cli.inputs.len() != 1 && !archive_compression { return Err(invalid("--output requires exactly one input")); }
-    if !cli.compress && cli.output.is_some() && cli.inputs.iter().any(|input| is_zip_archive(input)) {
-        return Err(invalid("--output is not supported for ZIP archives"));
+fn validate_inputs(inputs: &[String], stdin: bool) -> fbz::Result<()> {
+    if inputs.iter().any(|input| input == "-") {
+        if !stdin { return Err(invalid("stdin is not supported for this command")); }
+        if inputs.len() != 1 { return Err(invalid("stdin must be the only input")); }
     }
-    if cli.inputs.iter().any(|input| input == "-") && cli.inputs.len() != 1 { return Err(invalid("stdin must be the only input")); }
-    if (cli.index || cli.list) && cli.inputs.iter().any(|input| input == "-") { return Err(invalid("stdin is supported only for decoding and --test")); }
-    if !cli.compress && cli.skip_existing && cli.inputs.iter().any(|input| should_extract(cli, input)) {
-        return Err(invalid("--skip-existing is not supported when extracting archives"));
-    }
-    if cli.compress && cli.max_output.is_some() { return Err(invalid("--max-output applies only to decompression")); }
-    if archive_compression && cli.remove_input { return Err(invalid("--rm is not supported when creating archives")); }
     Ok(())
 }
 
@@ -166,8 +266,8 @@ fn inferred_compression_format(path: &Path) -> Option<CompressionFormat> {
     } else if name.ends_with(".zip") { Some(CompressionFormat::Zip) } else if name.ends_with(".gz") || name.ends_with(".gzip") { Some(CompressionFormat::Gzip) } else if name.ends_with(".bz2") || name.ends_with(".bzip2") { Some(CompressionFormat::Bzip2) } else if name.ends_with(".lz4") { Some(CompressionFormat::Lz4) } else { None }
 }
 
-fn compression_format(cli: &Cli) -> fbz::Result<CompressionFormat> {
-    let inferred = cli.output.as_deref().filter(|path| *path != Path::new("-")).and_then(inferred_compression_format);
+fn compression_format(cli: &CompressArgs) -> fbz::Result<CompressionFormat> {
+    let inferred = cli.write.output.as_deref().filter(|path| *path != Path::new("-")).and_then(inferred_compression_format);
     match (cli.format, inferred) {
         (Some(explicit), Some(inferred)) if explicit != inferred => Err(invalid("--format conflicts with the --output filename")),
         (Some(explicit), _) | (None, Some(explicit)) => Ok(explicit),
@@ -190,72 +290,66 @@ fn compressed_output(input: &Path, format: CompressionFormat, directory: Option<
     directory.map_or_else(|| PathBuf::from(format!("{}{suffix}", input.display())), |directory| directory.join(output))
 }
 
-fn run_compress(cli: &Cli) -> fbz::Result<()> {
+fn run_compress(cli: &CompressArgs, common: &Common) -> fbz::Result<()> {
+    validate_inputs(&cli.inputs, true)?;
     let format = compression_format(cli)?;
-    let options = EncodeOptions { threads: cli.threads, memory_limit: cli.memory_limit, level: cli.level };
-    if let Some(directory) = &cli.output_dir { fs::create_dir_all(directory)?; }
+    let archive = matches!(format, CompressionFormat::TarBzip2 | CompressionFormat::TarGzip | CompressionFormat::TarLz4 | CompressionFormat::Zip);
+    if cli.filters.is_set() && !archive { return Err(invalid("archive selection options require tar or ZIP compression")); }
+    if !archive && cli.write.output.is_some() && cli.inputs.len() != 1 { return Err(invalid("--output requires exactly one input")); }
+    if archive && cli.remove_input { return Err(invalid("--rm is not supported when creating archives")); }
+    let options = EncodeOptions { threads: common.threads, memory_limit: common.memory_limit, level: cli.level };
     match format {
-        CompressionFormat::TarBzip2 | CompressionFormat::TarGzip | CompressionFormat::TarLz4 => compress_tar(cli, format, options),
-        CompressionFormat::Zip => compress_zip(cli, options),
-        CompressionFormat::Bzip2 | CompressionFormat::Gzip | CompressionFormat::Lz4 => compress_streams(cli, format, options),
+        CompressionFormat::TarBzip2 | CompressionFormat::TarGzip | CompressionFormat::TarLz4 | CompressionFormat::Zip => compress_archive(cli, format, options, common.quiet),
+        CompressionFormat::Bzip2 | CompressionFormat::Gzip | CompressionFormat::Lz4 => compress_streams(cli, format, options, common.quiet),
     }
 }
 
-fn archive_output(cli: &Cli, format: CompressionFormat, kind: &str) -> fbz::Result<PathBuf> {
-    cli.output
+fn archive_output(cli: &CompressArgs, format: CompressionFormat) -> fbz::Result<PathBuf> {
+    cli.write.output
         .clone()
         .or_else(|| (cli.inputs.len() == 1 && cli.inputs[0] != "-").then(|| compressed_output(Path::new(&cli.inputs[0]), format, cli.output_dir.as_deref())))
-        .ok_or_else(|| invalid(format!("{kind} compression with multiple inputs requires --output")))
+        .ok_or_else(|| invalid("archive compression with multiple inputs requires --output"))
 }
 
-fn write_archive_output(cli: &Cli, output: &Path, write: impl FnOnce(&mut dyn Write) -> fbz::Result<()>) -> fbz::Result<()> {
+fn write_archive_output(cli: &CompressArgs, output: &Path, quiet: bool, write: impl FnOnce(&mut dyn Write) -> fbz::Result<()>) -> fbz::Result<()> {
     if output == Path::new("-") { return write(&mut io::stdout().lock()); }
-    if should_skip(output, cli.skip_existing, cli.quiet) { return Ok(()); }
-    atomic_write(output, cli.force, |writer| write(writer))
+    if should_skip(output, cli.write.skip_existing, quiet) { return Ok(()); }
+    atomic_write(output, cli.write.force, |writer| write(writer))
 }
 
-fn compress_tar(cli: &Cli, format: CompressionFormat, options: EncodeOptions) -> fbz::Result<()> {
-    let output = archive_output(cli, format, "tar")?;
-    write_archive_output(cli, &output, |writer| match format {
-        CompressionFormat::TarBzip2 => tar_create::pack_bzip2(&cli.inputs, writer, options).map(|_| ()),
-        CompressionFormat::TarGzip => tar_create::pack_gzip(&cli.inputs, writer, options).map(|_| ()),
-        CompressionFormat::TarLz4 => tar_create::pack_lz4(&cli.inputs, writer, options).map(|_| ()),
+fn compress_archive(cli: &CompressArgs, format: CompressionFormat, options: EncodeOptions, quiet: bool) -> fbz::Result<()> {
+    let output = archive_output(cli, format)?;
+    let inputs = archive_create::select(&cli.inputs, &cli.filters, &output)?;
+    if cli.filters.dry_run { return archive_create::preview(&inputs, &output, quiet); }
+    if let Some(directory) = &cli.output_dir { fs::create_dir_all(directory)?; }
+    write_archive_output(cli, &output, quiet, |writer| match format {
+        CompressionFormat::TarBzip2 => tar_create::pack_bzip2(&inputs, writer, options).map(|_| ()),
+        CompressionFormat::TarGzip => tar_create::pack_gzip(&inputs, writer, options).map(|_| ()),
+        CompressionFormat::TarLz4 => tar_create::pack_lz4(&inputs, writer, options).map(|_| ()),
+        CompressionFormat::Zip => fbz::zip::create_to_writer(&inputs, writer, options).map(|_| ()),
         _ => unreachable!(),
     })
 }
 
-fn compress_zip(cli: &Cli, options: EncodeOptions) -> fbz::Result<()> {
-    if cli.inputs.iter().any(|input| input == "-") { return Err(invalid("stdin cannot be used as a ZIP archive entry")); }
-    let output = archive_output(cli, CompressionFormat::Zip, "ZIP")?;
-    let inputs = cli
-        .inputs
-        .iter()
-        .map(|input| {
-            let source = PathBuf::from(input);
-            Ok(fbz::zip::PathInput { archive_path: archive_create::archive_name(&source)?, source })
-        })
-        .collect::<fbz::Result<Vec<_>>>()?;
-    write_archive_output(cli, &output, |writer| fbz::zip::create_to_writer(&inputs, writer, options).map(|_| ()))
-}
-
-fn compress_streams(cli: &Cli, format: CompressionFormat, options: EncodeOptions) -> fbz::Result<()> {
+fn compress_streams(cli: &CompressArgs, format: CompressionFormat, options: EncodeOptions, quiet: bool) -> fbz::Result<()> {
+    if let Some(directory) = &cli.output_dir { fs::create_dir_all(directory)?; }
     for input in &cli.inputs {
-        let output = cli
+        let output = cli.write
             .output
             .clone()
             .unwrap_or_else(|| if input == "-" { PathBuf::from("-") } else { compressed_output(Path::new(input), format, cli.output_dir.as_deref()) });
         if output == Path::new("-") {
             let mut source: Box<dyn Read> = if input == "-" { Box::new(io::stdin().lock()) } else { Box::new(fs::File::open(input)?) };
             let total = if input == "-" { 0 } else { fs::metadata(input)?.len() };
-            compress_stream(format, &mut source, &mut io::stdout().lock(), options, input, total, cli.quiet)?;
+            compress_stream(format, &mut source, &mut io::stdout().lock(), options, input, total, quiet)?;
             if cli.remove_input && input != "-" { fs::remove_file(input)?; }
         } else {
-            if should_skip(&output, cli.skip_existing, cli.quiet) { continue; }
+            if should_skip(&output, cli.write.skip_existing, quiet) { continue; }
             let input_path = Path::new(input);
             if input_path == output { return Err(invalid(format!("input and output are both {}", input_path.display()))); }
             let mut source = fs::File::open(input_path)?;
             let total = source.metadata()?.len();
-            atomic_write(&output, cli.force, |writer| compress_stream(format, &mut source, writer, options, input, total, cli.quiet))?;
+            atomic_write(&output, cli.write.force, |writer| compress_stream(format, &mut source, writer, options, input, total, quiet))?;
             preserve_metadata(input_path, &output)?;
             if cli.remove_input { fs::remove_file(input_path)?; }
         }
@@ -282,68 +376,79 @@ fn compress_stream(
     fbz::compress_to_writer_with_progress(input, output, format, options, |progress| display.update_encode(progress)).map(|_| ())
 }
 
-fn should_extract(cli: &Cli, input: &str) -> bool { cli.extract || (cli.output.is_none() && is_archive(input)) }
+fn should_extract(cli: &DecompressArgs, input: &str) -> bool { cli.extract || (cli.write.output.is_none() && is_archive(input)) }
 
-fn run_decode(cli: &Cli, options: DecodeOptions) -> fbz::Result<()> {
+fn run_decode(cli: &DecompressArgs, options: DecodeOptions, quiet: bool) -> fbz::Result<()> {
+    validate_inputs(&cli.inputs, true)?;
+    if cli.write.output.is_some() && cli.inputs.len() != 1 { return Err(invalid("--output requires exactly one input")); }
+    if cli.write.output.is_some() && cli.inputs.iter().any(|input| is_zip_archive(input)) {
+        return Err(invalid("--output is not supported for ZIP archives"));
+    }
+    if cli.write.skip_existing && cli.inputs.iter().any(|input| should_extract(cli, input)) {
+        return Err(invalid("--skip-existing is not supported when extracting archives"));
+    }
     if let Some(directory) = &cli.output_dir { fs::create_dir_all(directory)?; }
     for input in &cli.inputs {
         let extract = should_extract(cli, input);
         if extract {
             let destination = cli.output_dir.as_deref().unwrap_or_else(|| Path::new("."));
-            extract_input(input, destination, cli.force, options, cli.max_output, cli.quiet)?;
+            extract_input(input, destination, cli.write.force, options, cli.max_output, quiet)?;
             if cli.remove_input && input != "-" { fs::remove_file(input)?; }
             continue;
         }
-        if input == "-" || cli.output.as_deref() == Some(Path::new("-")) {
-            decode_input(input, &mut io::stdout().lock(), options, cli.max_output, cli.quiet)?;
+        if input == "-" || cli.write.output.as_deref() == Some(Path::new("-")) {
+            decode_input(input, &mut io::stdout().lock(), options, cli.max_output, quiet)?;
             if cli.remove_input && input != "-" { fs::remove_file(input)?; }
             continue;
         }
         let input_path = Path::new(input);
-        let output = cli.output.clone().unwrap_or_else(|| output_in(input_path, cli.output_dir.as_deref()));
+        let output = cli.write.output.clone().unwrap_or_else(|| output_in(input_path, cli.output_dir.as_deref()));
         if input_path == output { return Err(invalid(format!("input and output are both {}", input_path.display()))); }
-        if should_skip(&output, cli.skip_existing, cli.quiet) { continue; }
+        if should_skip(&output, cli.write.skip_existing, quiet) { continue; }
         let source = Source::open(input_path)?;
-        atomic_write(&output, cli.force, |writer| decode_data(source.as_slice(), input, writer, options, cli.max_output, cli.quiet))?;
+        atomic_write(&output, cli.write.force, |writer| decode_data(source.as_slice(), input, writer, options, cli.max_output, quiet))?;
         preserve_metadata(input_path, &output)?;
         if cli.remove_input { fs::remove_file(input_path)?; }
     }
     Ok(())
 }
 
-fn run_index(cli: &Cli, options: DecodeOptions) -> fbz::Result<()> {
+fn run_index(cli: &IndexArgs, options: DecodeOptions, quiet: bool) -> fbz::Result<()> {
+    validate_inputs(&cli.inputs, false)?;
+    if cli.write.output.is_some() && cli.inputs.len() != 1 { return Err(invalid("--output requires exactly one input")); }
     for input in &cli.inputs {
         let input_path = Path::new(input);
-        let output = cli.output.clone().unwrap_or_else(|| PathBuf::from(format!("{}.fbz2i", input_path.display())));
-        if output != Path::new("-") && should_skip(&output, cli.skip_existing, cli.quiet) { continue; }
+        let output = cli.write.output.clone().unwrap_or_else(|| PathBuf::from(format!("{}.fbz2i", input_path.display())));
+        if output != Path::new("-") && should_skip(&output, cli.write.skip_existing, quiet) { continue; }
         let source = Source::open(input_path)?;
-        if select_format(input, source.as_slice())? != Format::Bzip2 { return Err(invalid("--index is currently supported only for bzip2 inputs")); }
-        let index = build_index_data(source.as_slice(), input, options, cli.max_output, cli.quiet)?;
+        if select_format(input, source.as_slice())? != Format::Bzip2 { return Err(invalid("index is currently supported only for bzip2 inputs")); }
+        let index = build_index_data(source.as_slice(), input, options, cli.max_output, quiet)?;
         let encoded = index.to_bytes();
-        if output == Path::new("-") { io::stdout().lock().write_all(&encoded)?; } else { atomic_write(&output, cli.force, |writer| writer.write_all(&encoded).map_err(Error::from))?; }
+        if output == Path::new("-") { io::stdout().lock().write_all(&encoded)?; } else { atomic_write(&output, cli.write.force, |writer| writer.write_all(&encoded).map_err(Error::from))?; }
     }
     Ok(())
 }
 
-fn run_list(cli: &Cli, options: DecodeOptions) -> fbz::Result<()> {
+fn run_list(cli: &ListArgs, options: DecodeOptions, quiet: bool) -> fbz::Result<()> {
+    validate_inputs(&cli.inputs, false)?;
     let mut values = Vec::new();
     for input in &cli.inputs {
         let source = Source::open(input)?;
         match select_format(input, source.as_slice())? {
             Format::Bzip2 => {
-                let index = build_index_data(source.as_slice(), input, options, cli.max_output, cli.quiet)?;
+                let index = build_index_data(source.as_slice(), input, options, cli.max_output, quiet)?;
                 if cli.json { values.push(index_json(input, &index)); } else { print_index((cli.inputs.len() > 1).then_some(input), &index); }
             }
             Format::Gzip => {
-                let report = build_gzip_report_data(source.as_slice(), input, options, cli.max_output, cli.quiet)?;
+                let report = build_gzip_report_data(source.as_slice(), input, options, cli.max_output, quiet)?;
                 if cli.json { values.push(gzip_json(input, &report)); } else { print_gzip_report((cli.inputs.len() > 1).then_some(input), &report); }
             }
             Format::Lz4 => {
-                let report = build_lz4_report_data(source.as_slice(), input, options, cli.max_output, cli.quiet)?;
+                let report = build_lz4_report_data(source.as_slice(), input, options, cli.max_output, quiet)?;
                 if cli.json { values.push(lz4_json(input, &report)); } else { print_lz4_report((cli.inputs.len() > 1).then_some(input), &report); }
             }
             Format::Zip => {
-                let mut display = ProgressDisplay::new(input, source.as_slice().len() as u64, cli.quiet);
+                let mut display = ProgressDisplay::new(input, source.as_slice().len() as u64, quiet);
                 let report = zip_extract::validate(source.as_slice(), options, cli.max_output, |progress| display.update(progress))?;
                 if cli.json { values.push(zip_json(input, &report)); } else { print_zip_report((cli.inputs.len() > 1).then_some(input), &report); }
             }

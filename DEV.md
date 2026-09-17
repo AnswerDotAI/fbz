@@ -4,6 +4,8 @@
 
 ## Architecture
 
+The CLI has typed `compress/c`, `decompress/d`, `list/l`, `test`, and `index` commands. Only threads, memory limit, and quiet are global; each command owns its remaining options. Before parsing, `cli_args` checks the first positional against Clap's command names and aliases, inserting `decompress` for a bare path. It uses the same Clap schema to skip option values, including attached and combined short options, and never consults the filesystem. The old mode flags are not supported.
+
 ```text
 src/bitreader.rs      bounded MSB-first in-memory bit reads
 src/block.rs          independently decodable block construction and validation
@@ -27,7 +29,7 @@ src/indexed.rs         seekable decoded view and block cache
 src/lib.rs            public Rust API and private PyO3 binding
 src/source.rs         owned and memory-mapped compressed sources
 src/zip.rs            streaming ZIP/Zip64 creation over raw DEFLATE
-src/bin/fbz/archive_create.rs safe input-to-archive name derivation
+src/bin/fbz/archive_create.rs shared rgapi selection, safe archive naming, and dry-run
 src/bin/fbz/archive_extract.rs shared same-filesystem staging and atomic commit
 src/bin/fbz/tar_create.rs  streaming tar composition over each encoder
 src/bin/fbz/tar_extract.rs  bounded decode-to-tar bridge
@@ -62,6 +64,8 @@ ZIP structure semantics use `zip` 8.6.0 with all codec features disabled. The cr
 ZIP scheduling deliberately uses one parallelism level at a time. A sole DEFLATE entry at least 16 MiB compressed, or an entry at least 64 MiB in a multi-entry archive, uses all requested workers inside the raw DEFLATE decoder. Remaining entries run serial inner decoders concurrently on one Rayon pool. This keeps thread ownership and memory behaviour obvious, avoids nested oversubscription, and lets many ordinary entries naturally absorb stragglers through work stealing.
 
 ZIP creation follows the same policy over uncompressed sizes. One file of at least 16 MiB uses the segmented raw-DEFLATE engine. In multi-file archives, entries at least 64 MiB use that path sequentially, while ordinary entries are compressed concurrently with serial inner DEFLATE. A custom structural writer is smaller and more direct here than contorting the `zip` crate to accept externally segmented raw bitstreams; it writes descriptors, central records, Zip64 structures, Unix modes/symlinks, and extended timestamps while retaining only central-directory metadata. The `zip` crate remains the maintained parser for extraction.
+
+Archive creation selects paths once through `rgapi::find_iter` before opening the output. `archive_create.rs` owns the CLI filters, reconstructs required parent entries, rejects duplicate archive names, and excludes the output path. Defaults include hidden and ignored files and preserve symlinks. Tar and ZIP writers receive the same exact `zip::PathInput` list and never recurse; tar explicitly disables symlink following. Dry-run displays this same selection without creating output files or directories. Glob exclusions prune subtrees in rgapi, with `*` confined to a path component and `**` spanning directories.
 
 The shared `pipeline.rs` scheduler provides ordered results, byte-budgeted admission, cancellation, and a staged priority queue. Bzip2 uses the rolling candidate path: workers reserve the maximum possible decoded block size, then shrink that reservation to actual retained output until ordered validation consumes or rejects it. Gzip decoding uses the staged path for speculative DEFLATE and priority marker resolution. LZ4 decoding and multi-entry ZIP use ordinary ordered jobs. Compression's long-lived `StreamingOrdered` pool accepts work as bytes arrive, retains output in key order, catches worker panics, and cancels queued work when dropped. Gzip, LZ4, and bzip2 encoders all use it rather than maintaining codec-specific thread/channel machinery. Reservations conservatively cover owned input, temporary working state, and retained output until the coordinator consumes it.
 

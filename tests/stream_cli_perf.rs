@@ -7,7 +7,7 @@ fn fixture(extension: &str) -> PathBuf { PathBuf::from(env!("CARGO_MANIFEST_DIR"
 
 fn fbz(input: &std::path::Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_fbz"));
-    command.args(["--test", "-q", "-P", "0"]).arg(input);
+    command.args(["test", "-q", "-P", "0"]).arg(input);
     command
 }
 
