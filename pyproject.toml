@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
+requires = ["maturin>=1.9.2,<2.0"]
 build-backend = "build_backend"
 backend-path = ["."]
 
@@ -7,7 +7,7 @@ backend-path = ["."]
 name = "fbz"
 dynamic = ["version"]
 description = "Fast parallel compression and decompression for bzip2, gzip, LZ4, tar, and ZIP"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 requires-python = ">=3.10"
 readme = "README.md"
 authors = [{name = "Jeremy Howard", email = "github@jhoward.fastmail.fm"}]
