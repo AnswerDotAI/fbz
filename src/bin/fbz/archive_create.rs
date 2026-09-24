@@ -7,7 +7,7 @@ use std::{
 
 use clap::Args;
 use fbz::{Error, Result, zip::PathInput};
-use rgapi::FindOptions;
+use rgapi::{FindOptions, WalkOptions};
 
 fn invalid(message: impl Into<String>) -> Error { Error::InvalidConfiguration(message.into()) }
 
@@ -55,12 +55,13 @@ pub(super) fn select(inputs: &[String], filters: &Filters, output: &Path) -> Res
         if output.as_ref() == Some(&source) { return Err(invalid(format!("input and output are both {}", source.display()))); }
         let name = archive_name(Path::new(input))?;
         let directory = fs::symlink_metadata(&source)?.is_dir();
-        let opts = FindOptions {
-            root: source.clone(), hidden: true, ignore: filters.ignore, dirs: true, special_files: true,
+        let walk = WalkOptions {
+            roots: vec![source.clone()], hidden: true, ignore: filters.ignore,
             includes: filters.include.clone(), excludes: filters.exclude.clone(),
             exts: filters.extension.iter().map(|ext| format!("*.{}", ext.trim_start_matches('.'))).collect(),
             ..Default::default()
         };
+        let opts = FindOptions { walk, dirs: true, special_files: true, ..Default::default() };
         let mut paths = BTreeSet::new();
         for path in rgapi::find_iter(&opts).map_err(|e| invalid(e.to_string()))? {
             let path = path.map_err(|e| invalid(e.to_string()))?;
