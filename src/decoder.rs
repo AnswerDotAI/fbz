@@ -186,10 +186,7 @@ impl Decoder {
         let mut selectors = Vec::with_capacity(selector_count);
         for _ in 0..selector_count {
             let mut index = 0;
-            while bits.bit()? {
-                index += 1;
-                if index >= table_count { return Err(decode_error(bits.position(), DecodeError::InvalidBlock)); }
-            }
+            while bits.bit()? { index += 1; if index >= table_count { return Err(decode_error(bits.position(), DecodeError::InvalidBlock)); } }
             let selected = selector_mtf[index];
             selector_mtf.copy_within(0..index, 1);
             selector_mtf[0] = selected;

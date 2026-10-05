@@ -264,10 +264,7 @@ pub(super) fn validate(data: &[u8], options: DecodeOptions, max_output: Option<u
         &report.entries,
         report.source_len,
         options,
-        |entry, entry_options, progress| {
-            let mut output = WriterSink::new(io::sink());
-            decode_entry(data, entry, &mut output, entry_options, progress)
-        },
+        |entry, entry_options, progress| { let mut output = WriterSink::new(io::sink()); decode_entry(data, entry, &mut output, entry_options, progress) },
         progress,
     )?;
     Ok(report)

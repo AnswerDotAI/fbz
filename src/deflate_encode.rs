@@ -50,10 +50,7 @@ impl BitWriter {
         self.bytes.extend_from_slice(bytes);
     }
 
-    fn finish_aligned(mut self) -> Vec<u8> {
-        self.align_zero();
-        self.bytes
-    }
+    fn finish_aligned(mut self) -> Vec<u8> { self.align_zero(); self.bytes }
 }
 
 fn reverse_code(code: u16, bits: u8) -> u16 { code.reverse_bits() >> (16 - bits) }
@@ -443,10 +440,7 @@ impl<W: Write> Write for Encoder<W> {
         Ok(total)
     }
 
-    fn flush(&mut self) -> io::Result<()> {
-        self.flush_segments().map_err(Error::into_io)?;
-        self.output.as_mut().unwrap().flush()
-    }
+    fn flush(&mut self) -> io::Result<()> { self.flush_segments().map_err(Error::into_io)?; self.output.as_mut().unwrap().flush() }
 }
 
 pub fn compress_to_writer(input: &mut impl Read, output: &mut impl Write, options: EncodeOptions) -> Result<EncodeReport> {

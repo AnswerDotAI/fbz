@@ -69,10 +69,7 @@ fn mode(metadata: &fs::Metadata) -> u32 { if metadata.is_dir() { 0o040755 } else
 fn modified(metadata: &fs::Metadata) -> Option<u32> { metadata.modified().ok()?.duration_since(UNIX_EPOCH).ok()?.as_secs().try_into().ok() }
 
 #[cfg(unix)]
-fn symlink_bytes(path: &Path) -> Result<Vec<u8>> {
-    use std::os::unix::ffi::OsStrExt;
-    Ok(fs::read_link(path)?.as_os_str().as_bytes().to_vec())
-}
+fn symlink_bytes(path: &Path) -> Result<Vec<u8>> { use std::os::unix::ffi::OsStrExt; Ok(fs::read_link(path)?.as_os_str().as_bytes().to_vec()) }
 
 #[cfg(not(unix))]
 fn symlink_bytes(path: &Path) -> Result<Vec<u8>> { Ok(fs::read_link(path)?.as_os_str().to_string_lossy().into_owned().into_bytes()) }
@@ -240,10 +237,7 @@ fn prepare(entry: Entry, level: u8) -> Result<Prepared> {
     let (encoded, report) = deflate::compress_bytes_serial(&plain, level)?;
     if encoded.len() < plain.len() {
         Ok(Prepared { entry, bytes: encoded, method: METHOD_DEFLATE, crc: report.crc, uncompressed_size: report.input_len })
-    } else {
-        let uncompressed_size = plain.len() as u64;
-        Ok(Prepared { entry, bytes: plain, method: METHOD_STORED, crc, uncompressed_size })
-    }
+    } else { let uncompressed_size = plain.len() as u64; Ok(Prepared { entry, bytes: plain, method: METHOD_STORED, crc, uncompressed_size }) }
 }
 
 fn write_prepared<W: Write>(output: &mut CountingWriter<W>, prepared: Prepared, central: &mut Vec<CentralEntry>) -> Result<()> {
@@ -360,10 +354,7 @@ pub fn create_to_writer<W: Write + ?Sized>(inputs: &[PathInput], output: &mut W,
             PipelineLimits { memory: options.memory_limit, active: options.resolved_threads() },
             |entry| prepare(entry.clone(), options.level_or(6)),
             |result| result.as_ref().map_or(0, |prepared| prepared.bytes.capacity()),
-            |results| {
-                for key in 0..jobs.len() { write_prepared(&mut output, results.take(key)??, &mut central)?; }
-                Ok(())
-            },
+            |results| { for key in 0..jobs.len() { write_prepared(&mut output, results.take(key)??, &mut central)?; } Ok(()) },
         )?;
     }
     finish_archive(&mut output, &central)?;

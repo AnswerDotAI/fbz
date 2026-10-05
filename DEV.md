@@ -26,7 +26,7 @@ src/output.rs         owned/borrowed decoded-output sink abstraction
 src/pipeline.rs       shared ordered, byte-budgeted, staged worker scheduler
 src/index.rs           stable persistent index format
 src/indexed.rs         seekable decoded view and block cache
-src/lib.rs            public Rust API and private PyO3 binding
+src/lib.rs            public Rust API
 src/source.rs         owned and memory-mapped compressed sources
 src/zip.rs            streaming ZIP/Zip64 creation over raw DEFLATE
 src/bin/fbz/archive_create.rs shared rgapi selection, safe archive naming, and dry-run
@@ -35,10 +35,9 @@ src/bin/fbz/tar_create.rs  streaming tar composition over each encoder
 src/bin/fbz/tar_extract.rs  bounded decode-to-tar bridge
 src/bin/fbz/zip_extract.rs  ZIP parsing policy and adaptive entry extraction
 python/fbz/       thin Python I/O wrapper over fbz._core
-build_backend.py      stage the native CLI for PEP 517 wheel builds
+py/src/lib.rs         private PyO3 binding
 tests/corpus/         selected upstream conformance and corruption fixtures
 tests/                Rust CLI/corpus and Python API integration tests
-tools/stage_binaries.py copy the release executable into Maturin wheel data
 ```
 
 The current bzip2 scanner deliberately does not treat 48-bit marker matches or later `BZh` headers as validated structure. Full decoding must establish the exact block chain and validate every block CRC plus the combined stream CRC before marker candidates can become trusted index entries. Python integration tests use standard-library `bz2`/libbz2 as an independent fixture generator.
@@ -78,16 +77,15 @@ The bzip2 decoder is safe scalar Rust designed for LLVM auto-vectorisation. Huff
 ## Commands
 
 ```bash
+cargo develop
 cargo test
-cargo test --release
-cargo check --all-features
-cargo build --release --bins
-cargo package
-python tools/stage_binaries.py
-uv pip install --reinstall --no-deps -e .
+cargo check
+cargo package -p fbz
 pytest -q
 ship-rs-build
 ```
+
+The published `fbz` crate has no Python dependency. The unpublished `fbz-py` crate in `py/` builds the extension. `cargo develop` installs the extension and native CLI into the active venv using the same Cargo profile as bare `cargo test`. The shared `fastws.build_backend` stages native executables for wheel builds.
 
 Run `cargo fmt --check` after Rust edits and `chkstyle` after Python edits once tests pass.
 
@@ -376,10 +374,10 @@ The thin PEP 517 backend delegates to Maturin after building and staging the nat
 
 ## Release
 
-1. Run `cargo build --release --bins && python tools/stage_binaries.py`.
-2. Run `uv pip install --reinstall --no-deps -e . && pytest -q` so the custom backend installs both the extension and native CLI.
-3. Confirm the release version in `Cargo.toml` (`[package].version`).
-4. For the first crates.io release only, run `cargo publish`, then configure the `ci.yml` trusted publisher for `AnswerDotAI/fbz`; crates.io requires the crate to exist before trusted publishing can be configured.
+1. Run `cargo develop`, `cargo test`, and `pytest -q`.
+2. Build distributable wheels with `ship-rs-build` (or `cargo stage --profile dist` followed by `maturin build --profile dist`).
+3. Confirm the release version in `Cargo.toml` (`[workspace.package].version`).
+4. For the first crates.io release only, run `cargo publish -p fbz`, then configure the `ci.yml` trusted publisher for `AnswerDotAI/fbz`; crates.io requires the crate to exist before trusted publishing can be configured.
 5. Run `ship-release`.
 
 Fastship pushes the version tag for GitHub Actions, then bumps and pushes `Cargo.toml`. Tagged CI publishes the crate through crates.io trusted publishing as well as building the GitHub release and PyPI packages. The AnswerDotAI Homebrew tap discovers the new crate version in its daily bump workflow; green bot-created fbz-only formula PRs publish their bottles automatically through the tap's generated `brew pr-pull` workflow.

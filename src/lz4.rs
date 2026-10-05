@@ -346,10 +346,7 @@ fn decode_independent<S: OutputSink, P: FnMut(DecodeProgress)>(
                 PipelineLimits { memory: options.memory_limit, active: threads.saturating_add(2) },
                 |block| decode_layout_block(data, block, &[], frame.max_block_size),
                 |result| result.as_ref().map_or(0, DecodedBlock::retained_bytes),
-                |results| {
-                    for (key, block) in batch.iter().enumerate() { committer.commit(block, results.take(key)??)?; }
-                    Ok(())
-                },
+                |results| { for (key, block) in batch.iter().enumerate() { committer.commit(block, results.take(key)??)?; } Ok(()) },
             )?;
         }
         if let Some(error) = parse_error { return Err(error); }
@@ -410,10 +407,7 @@ pub fn decompress_to_writer_with_options_and_progress(
     output: &mut impl Write,
     options: DecodeOptions,
     progress: impl FnMut(DecodeProgress),
-) -> Result<Report> {
-    let mut output = WriterSink::new(output);
-    decompress_to_sink_with_options_and_progress(data, &mut output, options, progress)
-}
+) -> Result<Report> { let mut output = WriterSink::new(output); decompress_to_sink_with_options_and_progress(data, &mut output, options, progress) }
 
 #[doc(hidden)]
 pub fn decompress_to_sink_with_options_and_progress<S: OutputSink, P: FnMut(DecodeProgress)>(

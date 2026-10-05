@@ -187,9 +187,15 @@ fn cli_args() -> Vec<std::ffi::OsString> {
     let mut skip_value = false;
     let mut implicit = args.len() > 1;
     for arg in &args[1..] {
-        if skip_value { skip_value = false; continue; }
+        if skip_value {
+            skip_value = false;
+            continue;
+        }
         let text = arg.to_string_lossy();
-        if matches!(text.as_ref(), "-h" | "--help" | "-V" | "--version") { implicit = false; break; }
+        if matches!(text.as_ref(), "-h" | "--help" | "-V" | "--version") {
+            implicit = false;
+            break;
+        }
         if text == "--" { break; }
         if let Some(long) = text.strip_prefix("--") {
             skip_value = flags.iter().any(|flag| flag.get_long() == Some(long) && flag.get_action().takes_values());
@@ -299,13 +305,16 @@ fn run_compress(cli: &CompressArgs, common: &Common) -> fbz::Result<()> {
     if archive && cli.remove_input { return Err(invalid("--rm is not supported when creating archives")); }
     let options = EncodeOptions { threads: common.threads, memory_limit: common.memory_limit, level: cli.level };
     match format {
-        CompressionFormat::TarBzip2 | CompressionFormat::TarGzip | CompressionFormat::TarLz4 | CompressionFormat::Zip => compress_archive(cli, format, options, common.quiet),
+        CompressionFormat::TarBzip2 | CompressionFormat::TarGzip | CompressionFormat::TarLz4 | CompressionFormat::Zip => {
+            compress_archive(cli, format, options, common.quiet)
+        }
         CompressionFormat::Bzip2 | CompressionFormat::Gzip | CompressionFormat::Lz4 => compress_streams(cli, format, options, common.quiet),
     }
 }
 
 fn archive_output(cli: &CompressArgs, format: CompressionFormat) -> fbz::Result<PathBuf> {
-    cli.write.output
+    cli.write
+        .output
         .clone()
         .or_else(|| (cli.inputs.len() == 1 && cli.inputs[0] != "-").then(|| compressed_output(Path::new(&cli.inputs[0]), format, cli.output_dir.as_deref())))
         .ok_or_else(|| invalid("archive compression with multiple inputs requires --output"))
@@ -334,7 +343,8 @@ fn compress_archive(cli: &CompressArgs, format: CompressionFormat, options: Enco
 fn compress_streams(cli: &CompressArgs, format: CompressionFormat, options: EncodeOptions, quiet: bool) -> fbz::Result<()> {
     if let Some(directory) = &cli.output_dir { fs::create_dir_all(directory)?; }
     for input in &cli.inputs {
-        let output = cli.write
+        let output = cli
+            .write
             .output
             .clone()
             .unwrap_or_else(|| if input == "-" { PathBuf::from("-") } else { compressed_output(Path::new(input), format, cli.output_dir.as_deref()) });
@@ -381,9 +391,7 @@ fn should_extract(cli: &DecompressArgs, input: &str) -> bool { cli.extract || (c
 fn run_decode(cli: &DecompressArgs, options: DecodeOptions, quiet: bool) -> fbz::Result<()> {
     validate_inputs(&cli.inputs, true)?;
     if cli.write.output.is_some() && cli.inputs.len() != 1 { return Err(invalid("--output requires exactly one input")); }
-    if cli.write.output.is_some() && cli.inputs.iter().any(|input| is_zip_archive(input)) {
-        return Err(invalid("--output is not supported for ZIP archives"));
-    }
+    if cli.write.output.is_some() && cli.inputs.iter().any(|input| is_zip_archive(input)) { return Err(invalid("--output is not supported for ZIP archives")); }
     if cli.write.skip_existing && cli.inputs.iter().any(|input| should_extract(cli, input)) {
         return Err(invalid("--skip-existing is not supported when extracting archives"));
     }
@@ -467,10 +475,7 @@ fn extract_input(input: &str, destination: &Path, overwrite: bool, options: Deco
         let mut data = Vec::new();
         io::stdin().lock().read_to_end(&mut data)?;
         extract_data(&data, "stdin", destination, overwrite, options, max_output, quiet)
-    } else {
-        let source = Source::open(input)?;
-        extract_data(source.as_slice(), input, destination, overwrite, options, max_output, quiet)
-    }
+    } else { let source = Source::open(input)?; extract_data(source.as_slice(), input, destination, overwrite, options, max_output, quiet) }
 }
 
 fn extract_data(
@@ -510,10 +515,7 @@ fn decode_input(input: &str, output: &mut impl Write, options: DecodeOptions, ma
         let mut data = Vec::new();
         io::stdin().lock().read_to_end(&mut data)?;
         decode_data(&data, "stdin", output, options, max_output, quiet)
-    } else {
-        let source = Source::open(input)?;
-        decode_data(source.as_slice(), input, output, options, max_output, quiet)
-    }
+    } else { let source = Source::open(input)?; decode_data(source.as_slice(), input, output, options, max_output, quiet) }
 }
 
 fn decode_data(data: &[u8], label: &str, output: &mut impl Write, options: DecodeOptions, max_output: Option<usize>, quiet: bool) -> fbz::Result<()> {

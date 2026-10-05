@@ -177,10 +177,7 @@ mod tests {
     #[test]
     fn round_trips_a_gnarly_input() {
         let mut input = Vec::new();
-        for i in 0..2000u32 {
-            let b = (i / 7 % 5) as u8;
-            for _ in 0..(i % 9) { input.push(b); }
-        }
+        for i in 0..2000u32 { let b = (i / 7 % 5) as u8; for _ in 0..(i % 9) { input.push(b); } }
         for cut in [0, 1, 2, 3, 4, 5, 100, 1000, input.len()] {
             let slice = &input[..cut.min(input.len())];
             assert_eq!(decode(&encode(slice)), slice);

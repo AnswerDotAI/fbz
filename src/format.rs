@@ -34,10 +34,7 @@ pub struct EndCandidate { pub bit_offset: u64, pub expected_stream_crc: u32 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScanResult { pub streams: Vec<StreamHeaderCandidate>, pub blocks: Vec<BlockCandidate>, pub stream_ends: Vec<EndCandidate> }
 
-pub fn scan(data: &[u8]) -> Result<ScanResult> {
-    if !is_stream_header(data, 0) { return Err(Error::InvalidStreamHeader); }
-    Ok(scan_range(data, 0, data.len()))
-}
+pub fn scan(data: &[u8]) -> Result<ScanResult> { if !is_stream_header(data, 0) { return Err(Error::InvalidStreamHeader); } Ok(scan_range(data, 0, data.len())) }
 
 pub(crate) fn scan_with_pool(data: &[u8], pool: Option<&ThreadPool>, mut cancelled: impl FnMut() -> bool) -> Result<ScanResult> {
     if !is_stream_header(data, 0) { return Err(Error::InvalidStreamHeader); }

@@ -87,10 +87,7 @@ fn execute_job<T, O>(
     let value = execute(&job.payload);
     let retained = retained_size(&value).min(job.reservation);
     budget.complete(job.reservation, retained);
-    if sender.send((job.key, retained, value)).is_ok() { true } else {
-        budget.retire(retained);
-        false
-    }
+    if sender.send((job.key, retained, value)).is_ok() { true } else { budget.retire(retained); false }
 }
 
 pub(crate) struct OrderedResults<'a, T> { receiver: mpsc::Receiver<Message<T>>, ready: HashMap<usize, (usize, T)>, budget: &'a Budget }
@@ -138,10 +135,7 @@ where
                 while let Some(index) = budget.next(jobs) { if !execute_job(index, jobs, &budget, &sender, &execute, &retained_size) { return; } }
             });
         });
-        let result = {
-            let mut results = OrderedResults { receiver, ready: HashMap::new(), budget: &budget };
-            consume(&mut results)
-        };
+        let result = { let mut results = OrderedResults { receiver, ready: HashMap::new(), budget: &budget }; consume(&mut results) };
         budget.cancel();
         worker.join().map_err(|_| Error::InvalidConfiguration("parallel decoder worker panicked".into()))?;
         result

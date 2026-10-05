@@ -29,7 +29,7 @@ impl DecodeFormat {
         })
     }
 
-    pub(crate) fn detect_path(self, path: &Path, data: &[u8]) -> Result<Format> {
+    pub fn detect_path(self, path: &Path, data: &[u8]) -> Result<Format> {
         match self.explicit() { Some(format) => Ok(format), None => Format::detect(path, data) }
     }
 }

@@ -82,7 +82,11 @@ fn archive_names(path: &Path) -> Vec<String> {
         ZipArchive::new(Cursor::new(bytes)).unwrap().file_names().map(|name| name.trim_end_matches('/').to_owned()).collect()
     } else {
         let tar = fbz::decompress(&bytes, Default::default()).unwrap();
-        tar::Archive::new(tar.as_slice()).entries().unwrap().map(|entry| entry.unwrap().path().unwrap().display().to_string().trim_end_matches('/').to_owned()).collect()
+        tar::Archive::new(tar.as_slice())
+            .entries()
+            .unwrap()
+            .map(|entry| entry.unwrap().path().unwrap().display().to_string().trim_end_matches('/').to_owned())
+            .collect()
     };
     names.sort();
     names
@@ -93,15 +97,31 @@ fn archive_selection_and_preview_share_filters_across_formats() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().join("project");
     for dir in ["src/deep", "src/tests", "tests", "empty", ".git"] { fs::create_dir_all(root.join(dir)).unwrap(); }
-    for name in [".hidden.py", "ignored.py", "local.py", "search.py", "README.md", "src/app.py", "src/deep/nested.py", "src/tests/bad.py", "tests/bad.py", ".git/config"] {
-        fs::write(root.join(name), name).unwrap();
+    for name in [
+        ".hidden.py",
+        "ignored.py",
+        "local.py",
+        "search.py",
+        "README.md",
+        "src/app.py",
+        "src/deep/nested.py",
+        "src/tests/bad.py",
+        "tests/bad.py",
+        ".git/config",
+    ] { fs::write(root.join(name), name).unwrap(); }
+    for (name, contents) in [(".gitignore", "ignored.py"), (".ignore", "local.py"), (".rgignore", "search.py")] {
+        fs::write(root.join(name), contents).unwrap();
     }
-    for (name, contents) in [(".gitignore", "ignored.py"), (".ignore", "local.py"), (".rgignore", "search.py")] { fs::write(root.join(name), contents).unwrap(); }
     let cases: &[(&[&str], &[&str])] = &[
-        (&["-i", "-E", "tests", "-E", ".git", "--include", "*.py", "--include", "*.md", "-e", "py", "-e", "md"],
-         &["project", "project/.hidden.py", "project/README.md", "project/src", "project/src/app.py", "project/src/deep", "project/src/deep/nested.py"]),
+        (
+            &["-i", "-E", "tests", "-E", ".git", "--include", "*.py", "--include", "*.md", "-e", "py", "-e", "md"],
+            &["project", "project/.hidden.py", "project/README.md", "project/src", "project/src/app.py", "project/src/deep", "project/src/deep/nested.py"],
+        ),
         (&["--include", "src/*", "-e", "py"], &["project", "project/src", "project/src/app.py"]),
-        (&["--include", "src/**", "-e", "py", "-E", "tests"], &["project", "project/src", "project/src/app.py", "project/src/deep", "project/src/deep/nested.py"]),
+        (
+            &["--include", "src/**", "-e", "py", "-E", "tests"],
+            &["project", "project/src", "project/src/app.py", "project/src/deep", "project/src/deep/nested.py"],
+        ),
     ];
     for suffix in ["zip", "tar.gz", "tar.bz2", "tar.lz4"] {
         let output = format!("archive.{suffix}");
@@ -158,14 +178,18 @@ fn archive_selection_preserves_root_and_nested_symlinks() {
     let directory = tempfile::tempdir().unwrap();
     fs::create_dir(directory.path().join("tree")).unwrap();
     fs::write(directory.path().join("tree/file"), "data").unwrap();
-    for (link, target) in [("alias", "tree"), ("broken", "missing"), ("tree/link", "file")] { std::os::unix::fs::symlink(target, directory.path().join(link)).unwrap(); }
+    for (link, target) in [("alias", "tree"), ("broken", "missing"), ("tree/link", "file")] {
+        std::os::unix::fs::symlink(target, directory.path().join(link)).unwrap();
+    }
     for suffix in ["zip", "tar.gz"] {
         let archive = format!("archive.{suffix}");
         let output = binary().current_dir(directory.path()).args(["c", "tree", "alias", "broken", "-o", &archive]).output().unwrap();
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         let output = binary().current_dir(directory.path()).args([&archive, "-C", suffix]).output().unwrap();
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-        for (link, target) in [("alias", "tree"), ("broken", "missing"), ("tree/link", "file")] { assert_eq!(fs::read_link(directory.path().join(suffix).join(link)).unwrap(), Path::new(target)); }
+        for (link, target) in [("alias", "tree"), ("broken", "missing"), ("tree/link", "file")] {
+            assert_eq!(fs::read_link(directory.path().join(suffix).join(link)).unwrap(), Path::new(target));
+        }
     }
 }
 
@@ -410,8 +434,14 @@ fn commands_aliases_and_implicit_paths_are_unambiguous() {
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         assert_eq!(fbz::gzip::decompress(&output.stdout).unwrap(), plain);
     }
-    for args in [vec!["payload.gz"], vec!["d", "payload.gz"], vec!["decompress", "payload.gz"],
-        vec!["-qP1", "d", "payload.gz"], vec!["-P", "1", "payload.gz"], vec!["--memory-limit=64M", "payload.gz"]] {
+    for args in [
+        vec!["payload.gz"],
+        vec!["d", "payload.gz"],
+        vec!["decompress", "payload.gz"],
+        vec!["-qP1", "d", "payload.gz"],
+        vec!["-P", "1", "payload.gz"],
+        vec!["--memory-limit=64M", "payload.gz"],
+    ] {
         let output = binary().current_dir(directory.path()).args(args).args(["-o", "-"]).output().unwrap();
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         assert_eq!(output.stdout, plain);
@@ -449,9 +479,7 @@ fn command_help_and_options_are_scoped() {
     assert!(help("d").contains("--extract") && !help("d").contains("--include"));
     assert!(help("l").contains("--json") && !help("l").contains("--output"));
     assert!(!help("test").contains("--force") && !help("index").contains("--output-dir"));
-    for mode in ["-z", "--compress", "--list", "--test", "--index"] {
-        assert_eq!(binary().args([mode, "file.gz"]).output().unwrap().status.code(), Some(2));
-    }
+    for mode in ["-z", "--compress", "--list", "--test", "--index"] { assert_eq!(binary().args([mode, "file.gz"]).output().unwrap().status.code(), Some(2)); }
 }
 
 #[test]

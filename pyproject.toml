@@ -1,7 +1,6 @@
 [build-system]
-requires = ["maturin>=1.9.2,<2.0"]
-build-backend = "build_backend"
-backend-path = ["."]
+requires = ["maturin>=1.9.2,<2.0", "fastws-cli>=0.0.20"]
+build-backend = "fastws.build_backend"
 
 [project]
 name = "fbz"
@@ -17,7 +16,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["fastship>=0.0.11", "maturin>=1.0,<2.0", "pytest"]
+dev = ["fastws-cli>=0.0.20", "fastship>=0.0.11", "maturin>=1.0,<2.0", "pytest"]
 
 [project.urls]
 Homepage = "https://github.com/AnswerDotAI/fbz"
@@ -25,13 +24,16 @@ Repository = "https://github.com/AnswerDotAI/fbz"
 Issues = "https://github.com/AnswerDotAI/fbz/issues"
 
 [tool.maturin]
-features = ["extension-module"]
+manifest-path = "py/Cargo.toml"
 python-source = "python"
 module-name = "fbz._core"
 data = "target/wheel-data"
 
 [tool.uv]
-cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*.rs" }, { file = "Cargo.toml" }, { file = ".git/fastws-cargo-key" }]
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "py/Cargo.toml" }]
+
+[tool.fastws]
+native-binaries = true
 
 [tool.fastship]
 branch = "main"

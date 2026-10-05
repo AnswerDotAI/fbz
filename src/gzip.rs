@@ -151,10 +151,7 @@ pub fn decompress_to_writer_with_options_and_progress(
     output: &mut impl Write,
     options: DecodeOptions,
     progress: impl FnMut(DecodeProgress),
-) -> Result<Report> {
-    let mut output = WriterSink::new(output);
-    decompress_to_sink_with_options_and_progress(data, &mut output, options, progress)
-}
+) -> Result<Report> { let mut output = WriterSink::new(output); decompress_to_sink_with_options_and_progress(data, &mut output, options, progress) }
 
 /// Decode into an output that can take ownership of completed chunks.
 #[doc(hidden)]
@@ -422,10 +419,7 @@ fn valid_precode_shape(data: &[u8], block_bit: usize) -> bool {
     }
     if used == 0 { return false; }
     let mut remaining = 1_i16;
-    for count in counts.iter().skip(1) {
-        remaining = remaining * 2 - i16::from(*count);
-        if remaining < 0 { return false; }
-    }
+    for count in counts.iter().skip(1) { remaining = remaining * 2 - i16::from(*count); if remaining < 0 { return false; } }
     remaining == 0 || used == 1
 }
 
@@ -1026,10 +1020,7 @@ impl<'a, W: OutputSink> Emitter<'a, W> {
         Ok(())
     }
 
-    fn finish(mut self) -> Result<(u32, u64)> {
-        self.flush_pending()?;
-        Ok((self.crc.finalize(), self.member_decoded))
-    }
+    fn finish(mut self) -> Result<(u32, u64)> { self.flush_pending()?; Ok((self.crc.finalize(), self.member_decoded)) }
 }
 
 impl<W: OutputSink> DeflateOutput for Emitter<'_, W> {

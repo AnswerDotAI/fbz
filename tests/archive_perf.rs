@@ -124,10 +124,7 @@ impl CadenceSink {
 }
 
 impl OutputSink for CadenceSink {
-    fn write_borrowed(&mut self, buffer: &[u8]) -> io::Result<()> {
-        self.record(buffer.len());
-        Ok(())
-    }
+    fn write_borrowed(&mut self, buffer: &[u8]) -> io::Result<()> { self.record(buffer.len()); Ok(()) }
 
     fn write_owned_from(&mut self, buffer: Vec<u8>, start: usize) -> io::Result<()> {
         let bytes = buffer.len().checked_sub(start).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "owned chunk start exceeds its length"))?;

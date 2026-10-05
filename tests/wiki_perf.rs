@@ -20,10 +20,7 @@ const ENWIKI_1000_LEN: usize = 2_715_335_085;
 struct CountingSink(u64);
 
 impl Write for CountingSink {
-    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
-        self.0 += buffer.len() as u64;
-        Ok(buffer.len())
-    }
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> { self.0 += buffer.len() as u64; Ok(buffer.len()) }
 
     fn flush(&mut self) -> io::Result<()> { Ok(()) }
 }
@@ -205,10 +202,7 @@ fn timed_vec(name: &str, decode: impl FnOnce() -> Vec<u8>) {
     eprintln!("{name}: {elapsed:.3?}");
 }
 
-fn enwiki_fixture() -> (Vec<u8>, usize) {
-    let encoded = fs::read(corpus_path("enwiki-first-1000-streams.xml.bz2")).unwrap();
-    (encoded, requested_threads())
-}
+fn enwiki_fixture() -> (Vec<u8>, usize) { let encoded = fs::read(corpus_path("enwiki-first-1000-streams.xml.bz2")).unwrap(); (encoded, requested_threads()) }
 
 #[test]
 #[ignore = "local enwiki multistream performance comparison"]

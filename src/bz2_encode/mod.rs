@@ -177,10 +177,7 @@ impl<W: Write> Write for Encoder<W> {
         Ok(bytes.len())
     }
 
-    fn flush(&mut self) -> io::Result<()> {
-        self.drain_bits().map_err(Error::into_io)?;
-        self.output.as_mut().unwrap().flush()
-    }
+    fn flush(&mut self) -> io::Result<()> { self.drain_bits().map_err(Error::into_io)?; self.output.as_mut().unwrap().flush() }
 }
 
 pub fn compress(data: &[u8], options: EncodeOptions) -> Result<Vec<u8>> {

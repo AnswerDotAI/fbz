@@ -39,9 +39,7 @@ impl Filters {
 // Resolve parent aliases for output exclusion, but never dereference an entry's own symlink.
 fn entry_path(path: &Path) -> io::Result<PathBuf> {
     let path = std::path::absolute(path)?;
-    if let (Some(parent), Some(name)) = (path.parent(), path.file_name()) {
-        if let Ok(parent) = parent.canonicalize() { return Ok(parent.join(name)); }
-    }
+    if let (Some(parent), Some(name)) = (path.parent(), path.file_name()) { if let Ok(parent) = parent.canonicalize() { return Ok(parent.join(name)); } }
     Ok(path)
 }
 
@@ -56,8 +54,11 @@ pub(super) fn select(inputs: &[String], filters: &Filters, output: &Path) -> Res
         let name = archive_name(Path::new(input))?;
         let directory = fs::symlink_metadata(&source)?.is_dir();
         let walk = WalkOptions {
-            roots: vec![source.clone()], hidden: true, ignore: filters.ignore,
-            includes: filters.include.clone(), excludes: filters.exclude.clone(),
+            roots: vec![source.clone()],
+            hidden: true,
+            ignore: filters.ignore,
+            includes: filters.include.clone(),
+            excludes: filters.exclude.clone(),
             exts: filters.extension.iter().map(|ext| format!("*.{}", ext.trim_start_matches('.'))).collect(),
             ..Default::default()
         };

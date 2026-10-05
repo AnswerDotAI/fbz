@@ -161,10 +161,7 @@ fn decode_to_sink_impl_with_prefetched(
         PipelineLimits { memory: options.memory_limit, active: usize::MAX },
         |job| decoder::decode_candidate(data, job.start_bit, job.expected_crc),
         candidate_len,
-        |results| {
-            let mut candidates = ParallelCandidates { results, prefetched };
-            assemble(data, output, &markers, &mut candidates, progress)
-        },
+        |results| { let mut candidates = ParallelCandidates { results, prefetched }; assemble(data, output, &markers, &mut candidates, progress) },
     )
 }
 

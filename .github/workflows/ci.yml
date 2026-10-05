@@ -15,15 +15,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --release
-      - run: cargo check --all-features
-      - run: cargo package
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - run: cargo build --release --bins
-      - run: python tools/stage_binaries.py
+      - run: cargo test
+      - run: cargo check --all-features
+      - run: cargo package -p fbz
       - run: pip install -e '.[dev]'
+      - run: cargo develop
       - run: pytest -q
 
   build:
@@ -35,16 +34,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v7
+        if: runner.os != 'Linux'
+        with:
+          python-version: '3.12'
       - name: Stage native binary
         if: runner.os != 'Linux'
         run: |
-          cargo build --profile dist --bins
-          python tools/stage_binaries.py dist
+          python -m pip install 'fastws-cli>=0.0.20'
+          cargo stage --profile dist
       - uses: PyO3/maturin-action@v1
         with:
           args: --profile dist --out dist -i python3.10 -i python3.11 -i python3.12 -i python3.13 -i python3.14
           manylinux: auto
-          before-script-linux: cargo build --profile dist --bins && python3.10 tools/stage_binaries.py dist
+          before-script-linux: export PATH="/opt/python/cp310-cp310/bin:$PATH" && python3.10 -m pip install 'fastws-cli>=0.0.20' && cargo stage --profile dist
       - uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}
@@ -85,6 +88,6 @@ jobs:
       - name: Publish crate when its version is new
         run: |
           version=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[] | select(.name=="fbz") | .version')
-          if curl -sf -A "fbz-ci (https://github.com/AnswerDotAI/fbz)" "https://crates.io/api/v1/crates/fbz/$version" >/dev/null; then echo "fbz $version is already published"; else cargo publish; fi
+          if curl -sf -A "fbz-ci (https://github.com/AnswerDotAI/fbz)" "https://crates.io/api/v1/crates/fbz/$version" >/dev/null; then echo "fbz $version is already published"; else cargo publish -p fbz; fi
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
