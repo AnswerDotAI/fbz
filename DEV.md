@@ -375,7 +375,7 @@ The thin PEP 517 backend delegates to Maturin after building and staging the nat
 ## Release
 
 1. Run `cargo develop`, `cargo test`, and `pytest -q`.
-2. Build distributable wheels with `ship-rs-build` (or `cargo stage --profile dist` followed by `maturin build --profile dist`).
+2. Build distributable wheels with `ship-rs-build --profile dist` (or `cargo stage --profile dist` followed by `maturin build --profile dist`).
 3. Confirm the release version in `Cargo.toml` (`[workspace.package].version`).
 4. For the first crates.io release only, run `cargo publish -p fbz`, then configure the `ci.yml` trusted publisher for `AnswerDotAI/fbz`; crates.io requires the crate to exist before trusted publishing can be configured.
 5. Run `ship-release`.
