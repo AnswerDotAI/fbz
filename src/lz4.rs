@@ -26,54 +26,22 @@ pub enum BlockMode { Independent, Linked }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Frame {
-    pub compressed_start: u64,
-    pub compressed_end: u64,
-    pub decoded_start: u64,
-    pub decoded_len: u64,
-    pub block_max_size: u32,
-    pub block_mode: BlockMode,
-    pub block_checksums: bool,
-    pub content_checksum: bool,
-    pub declared_content_size: Option<u64>,
-    pub first_block: usize,
-    pub block_count: usize,
+    pub compressed_start: u64, pub compressed_end: u64, pub decoded_start: u64, pub decoded_len: u64, pub block_max_size: u32, pub block_mode: BlockMode,
+    pub block_checksums: bool, pub content_checksum: bool, pub declared_content_size: Option<u64>, pub first_block: usize, pub block_count: usize
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Block {
-    pub frame: u32,
-    pub compressed_start: u64,
-    pub compressed_end: u64,
-    pub decoded_start: u64,
-    pub decoded_len: u64,
-    pub stored: bool,
-}
+pub struct Block { pub frame: u32, pub compressed_start: u64, pub compressed_end: u64, pub decoded_start: u64, pub decoded_len: u64, pub stored: bool }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Report {
-    pub source_len: u64,
-    pub decoded_len: u64,
-    pub frames: Vec<Frame>,
-    pub blocks: Vec<Block>,
-}
+pub struct Report { pub source_len: u64, pub decoded_len: u64, pub frames: Vec<Frame>, pub blocks: Vec<Block> }
 
 #[derive(Clone, Debug)]
-struct BlockLayout {
-    data_start: usize,
-    data_end: usize,
-    stored: bool,
-    expected_checksum: Option<u32>,
-}
+struct BlockLayout { data_start: usize, data_end: usize, stored: bool, expected_checksum: Option<u32> }
 
 #[derive(Clone, Debug)]
 struct FrameHeader {
-    source_start: usize,
-    blocks_start: usize,
-    max_block_size: usize,
-    mode: BlockMode,
-    block_checksums: bool,
-    content_checksum: bool,
-    content_size: Option<u64>,
+    source_start: usize, blocks_start: usize, max_block_size: usize, mode: BlockMode, block_checksums: bool, content_checksum: bool, content_size: Option<u64>
 }
 
 fn invalid(message: impl Into<String>) -> Error { Error::InvalidLz4(message.into()) }
@@ -109,11 +77,8 @@ fn parse_frame_header(data: &[u8], start: usize) -> Result<FrameHeader> {
     let content_checksum = flg & 0x04 != 0;
     let has_dictionary = flg & 0x01 != 0;
     let max_block_size = match (bd >> 4) & 0x07 {
-        4 => 64 * 1024,
-        5 => 256 * 1024,
-        6 => 1024 * 1024,
-        7 => 4 * 1024 * 1024,
-        value => return Err(invalid(format!("unsupported block maximum-size code {value}"))),
+        4 => 64 * 1024, 5 => 256 * 1024, 6 => 1024 * 1024, 7 => 4 * 1024 * 1024,
+        value => return Err(invalid(format!("unsupported block maximum-size code {value}")))
     };
     let mut position = start + 6;
     let content_size = if has_content_size {
@@ -157,10 +122,7 @@ fn next_block(data: &[u8], position: &mut usize, frame: &FrameHeader) -> Result<
 
 fn skip_frame(data: &[u8], position: usize) -> Result<usize> {
     let length = read_u32(data, position + 4, "skippable-frame length")? as usize;
-    position
-        .checked_add(8)
-        .and_then(|value| value.checked_add(length))
-        .filter(|&end| end <= data.len())
+    position.checked_add(8).and_then(|value| value.checked_add(length)).filter(|&end| end <= data.len())
         .ok_or_else(|| invalid("skippable frame exceeds the input"))
 }
 
@@ -232,18 +194,13 @@ fn decode_layout_block(data: &[u8], block: &BlockLayout, dictionary: &[u8], max_
             return Err(invalid(format!("block checksum mismatch at byte {}: expected {expected:08x}, decoded {actual:08x}", block.data_start)));
         }
     }
-    if block.stored { Ok(DecodedBlock::Stored { start: block.data_start, end: block.data_end }) } else { Ok(DecodedBlock::Decoded(decompress_block(encoded, dictionary, max_block_size)?)) }
+    if block.stored { Ok(DecodedBlock::Stored { start: block.data_start, end: block.data_end }) }
+    else { Ok(DecodedBlock::Decoded(decompress_block(encoded, dictionary, max_block_size)?)) }
 }
 
 struct FrameCommitter<'a, S, P> {
-    data: &'a [u8],
-    output: &'a mut S,
-    progress: &'a mut P,
-    hasher: Option<XxHash32>,
-    decoded_base: u64,
-    decoded: u64,
-    frame_number: u32,
-    blocks: &'a mut Vec<Block>,
+    data: &'a [u8], output: &'a mut S, progress: &'a mut P, hasher: Option<XxHash32>, decoded_base: u64, decoded: u64, frame_number: u32,
+    blocks: &'a mut Vec<Block>
 }
 
 impl<S: OutputSink, P: FnMut(DecodeProgress)> FrameCommitter<'_, S, P> {
@@ -255,14 +212,8 @@ impl<S: OutputSink, P: FnMut(DecodeProgress)> FrameCommitter<'_, S, P> {
             DecodedBlock::Stored { start, end } => self.output.write_borrowed(&self.data[start..end])?,
             DecodedBlock::Decoded(bytes) => self.output.write_owned_from(bytes, 0)?,
         }
-        self.blocks.push(Block {
-            frame: self.frame_number,
-            compressed_start: layout.data_start as u64,
-            compressed_end: layout.data_end as u64,
-            decoded_start: self.decoded_base + self.decoded,
-            decoded_len,
-            stored: layout.stored,
-        });
+        self.blocks.push(Block { frame: self.frame_number, compressed_start: layout.data_start as u64, compressed_end: layout.data_end as u64,
+            decoded_start: self.decoded_base + self.decoded, decoded_len, stored: layout.stored });
         self.decoded = self.decoded.checked_add(decoded_len).ok_or_else(|| invalid("decoded length overflows u64"))?;
         (self.progress)(DecodeProgress { compressed_bytes: layout.data_end as u64, decoded_bytes: self.decoded_base + self.decoded });
         Ok(())
@@ -270,12 +221,7 @@ impl<S: OutputSink, P: FnMut(DecodeProgress)> FrameCommitter<'_, S, P> {
 }
 
 fn decode_independent<S: OutputSink, P: FnMut(DecodeProgress)>(
-    data: &[u8],
-    frame: &FrameHeader,
-    position: &mut usize,
-    options: DecodeOptions,
-    pool: &mut Option<ThreadPool>,
-    committer: &mut FrameCommitter<'_, S, P>,
+    data: &[u8], frame: &FrameHeader, position: &mut usize, options: DecodeOptions, pool: &mut Option<ThreadPool>, committer: &mut FrameCommitter<'_, S, P>
 ) -> Result<()> {
     let threads = worker_threads(options);
     let parallel_slots = options.memory_limit / frame.max_block_size;
@@ -303,10 +249,7 @@ fn decode_independent<S: OutputSink, P: FnMut(DecodeProgress)>(
                     } else { frame.max_block_size });
                     batch.push(block);
                 }
-                Ok(None) => {
-                    ended = true;
-                    break;
-                }
+                Ok(None) => { ended = true; break; }
                 Err(error) => {
                     parse_error = Some(error);
                     ended = true;
@@ -322,32 +265,22 @@ fn decode_independent<S: OutputSink, P: FnMut(DecodeProgress)>(
                 let decoded = decode_layout_block(data, &block, &[], frame.max_block_size)?;
                 committer.commit(&block, decoded)?;
             }
-        }
-        else {
+        } else {
             if pool.is_none() {
                 *pool = Some(
-                    ThreadPoolBuilder::new()
-                        .num_threads(threads)
-                        .thread_name(|index| format!("fbz-lz4-{index}"))
-                        .build()
-                        .map_err(|error| invalid(error.to_string()))?,
-                );
+                    ThreadPoolBuilder::new().num_threads(threads).thread_name(|index| format!("fbz-lz4-{index}")).build()
+                        .map_err(|error| invalid(error.to_string()))?);
             }
             let pool = pool.as_ref().unwrap();
-            let jobs: Vec<_> = batch
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(|(key, block)| Job { key, reservation: if block.stored { 0 } else { frame.max_block_size }, payload: block })
-                .collect();
+            let jobs: Vec<_> = batch.iter().cloned().enumerate()
+                .map(|(key, block)| Job { key, reservation: if block.stored { 0 } else { frame.max_block_size }, payload: block }).collect();
             run_ordered(
-                pool,
-                &jobs,
-                PipelineLimits { memory: options.memory_limit, active: threads.saturating_add(2) },
-                |block| decode_layout_block(data, block, &[], frame.max_block_size),
-                |result| result.as_ref().map_or(0, DecodedBlock::retained_bytes),
-                |results| { for (key, block) in batch.iter().enumerate() { committer.commit(block, results.take(key)??)?; } Ok(()) },
-            )?;
+                pool, &jobs, PipelineLimits { memory: options.memory_limit, active: threads.saturating_add(2) },
+                |block| decode_layout_block(data, block, &[], frame.max_block_size), |result| result.as_ref().map_or(0, DecodedBlock::retained_bytes),
+                |results| {
+                    for (key, block) in batch.iter().enumerate() { committer.commit(block, results.take(key)??)?; }
+                    Ok(())
+                })?;
         }
         if let Some(error) = parse_error { return Err(error); }
     }
@@ -366,11 +299,7 @@ fn update_history(history: &mut Vec<u8>, bytes: &[u8]) {
 }
 
 fn decode_linked<S: OutputSink, P: FnMut(DecodeProgress)>(
-    data: &[u8],
-    frame: &FrameHeader,
-    position: &mut usize,
-    committer: &mut FrameCommitter<'_, S, P>,
-) -> Result<()> {
+    data: &[u8], frame: &FrameHeader, position: &mut usize, committer: &mut FrameCommitter<'_, S, P>) -> Result<()> {
     let mut history = Vec::with_capacity(WINDOW_SIZE);
     loop {
         check_output(committer.output)?;
@@ -403,19 +332,14 @@ pub fn decompress_to_writer_with_progress(data: &[u8], output: &mut impl Write, 
 }
 
 pub fn decompress_to_writer_with_options_and_progress(
-    data: &[u8],
-    output: &mut impl Write,
-    options: DecodeOptions,
-    progress: impl FnMut(DecodeProgress),
-) -> Result<Report> { let mut output = WriterSink::new(output); decompress_to_sink_with_options_and_progress(data, &mut output, options, progress) }
+    data: &[u8], output: &mut impl Write, options: DecodeOptions, progress: impl FnMut(DecodeProgress)) -> Result<Report> {
+    let mut output = WriterSink::new(output);
+    decompress_to_sink_with_options_and_progress(data, &mut output, options, progress)
+}
 
 #[doc(hidden)]
 pub fn decompress_to_sink_with_options_and_progress<S: OutputSink, P: FnMut(DecodeProgress)>(
-    data: &[u8],
-    output: &mut S,
-    options: DecodeOptions,
-    mut progress: P,
-) -> Result<Report> {
+    data: &[u8], output: &mut S, options: DecodeOptions, mut progress: P) -> Result<Report> {
     let options = options.validate()?;
     let mut frames = Vec::new();
     let mut blocks = Vec::new();
@@ -425,10 +349,7 @@ pub fn decompress_to_sink_with_options_and_progress<S: OutputSink, P: FnMut(Deco
     while position < data.len() {
         check_output(output)?;
         let magic = read_u32(data, position, "frame magic")?;
-        if (SKIPPABLE_MAGIC_START..=SKIPPABLE_MAGIC_END).contains(&magic) {
-            position = skip_frame(data, position)?;
-            continue;
-        }
+        if (SKIPPABLE_MAGIC_START..=SKIPPABLE_MAGIC_END).contains(&magic) { position = skip_frame(data, position)?; continue; }
         if magic == LEGACY_MAGIC { return Err(invalid("legacy LZ4 frames are not supported")); }
         if magic != FRAME_MAGIC { return Err(invalid(format!("wrong magic {magic:08x} at byte {position}"))); }
         let frame_number = frames.len();
@@ -436,23 +357,16 @@ pub fn decompress_to_sink_with_options_and_progress<S: OutputSink, P: FnMut(Deco
         position = frame.blocks_start;
         let first_block = blocks.len();
         let decoded_len = {
-            let mut committer = FrameCommitter {
-                data,
-                output,
-                progress: &mut progress,
-                hasher: frame.content_checksum.then(|| XxHash32::with_seed(0)),
-                decoded_base: decoded_total,
-                decoded: 0,
-                frame_number: u32::try_from(frame_number).map_err(|_| invalid("too many frames"))?,
-                blocks: &mut blocks,
+            let mut committer = FrameCommitter { data, output, progress: &mut progress, hasher: frame.content_checksum.then(|| XxHash32::with_seed(0)),
+                decoded_base: decoded_total, decoded: 0, frame_number: u32::try_from(frame_number).map_err(|_| invalid("too many frames"))?, blocks: &mut blocks
             };
             match frame.mode {
                 BlockMode::Independent => decode_independent(data, &frame, &mut position, options, &mut pool, &mut committer)?,
                 BlockMode::Linked => decode_linked(data, &frame, &mut position, &mut committer)?,
             }
-            if let Some(expected) = frame.content_size
-                && committer.decoded != expected
-            { return Err(invalid(format!("content size mismatch: expected {expected}, decoded {}", committer.decoded))); }
+            if let Some(expected) = frame.content_size && committer.decoded != expected {
+                return Err(invalid(format!("content size mismatch: expected {expected}, decoded {}", committer.decoded)));
+            }
             if frame.content_checksum {
                 let expected = read_u32(data, position, "content checksum")?;
                 position += 4;
@@ -462,19 +376,9 @@ pub fn decompress_to_sink_with_options_and_progress<S: OutputSink, P: FnMut(Deco
             committer.decoded
         };
         decoded_total = decoded_total.checked_add(decoded_len).ok_or_else(|| invalid("decoded length overflows u64"))?;
-        frames.push(Frame {
-            compressed_start: frame.source_start as u64,
-            compressed_end: position as u64,
-            decoded_start: decoded_total - decoded_len,
-            decoded_len,
-            block_max_size: frame.max_block_size as u32,
-            block_mode: frame.mode,
-            block_checksums: frame.block_checksums,
-            content_checksum: frame.content_checksum,
-            declared_content_size: frame.content_size,
-            first_block,
-            block_count: blocks.len() - first_block,
-        });
+        frames.push(Frame { compressed_start: frame.source_start as u64, compressed_end: position as u64, decoded_start: decoded_total - decoded_len,
+            decoded_len, block_max_size: frame.max_block_size as u32, block_mode: frame.mode, block_checksums: frame.block_checksums,
+            content_checksum: frame.content_checksum, declared_content_size: frame.content_size, first_block, block_count: blocks.len() - first_block });
         progress(DecodeProgress { compressed_bytes: position as u64, decoded_bytes: decoded_total });
     }
     if frames.is_empty() { return Err(invalid("input contains no LZ4 frames")); }
@@ -492,11 +396,7 @@ mod tests {
     use super::*;
 
     fn oracle_frame(data: &[u8], mode: OracleMode, block_checksums: bool, content_checksum: bool) -> Vec<u8> {
-        let info = FrameInfo::new()
-            .block_size(BlockSize::Max64KB)
-            .block_mode(mode)
-            .block_checksums(block_checksums)
-            .content_checksum(content_checksum)
+        let info = FrameInfo::new().block_size(BlockSize::Max64KB).block_mode(mode).block_checksums(block_checksums).content_checksum(content_checksum)
             .content_size(Some(data.len() as u64));
         let mut encoder = FrameEncoder::with_frame_info(info, Vec::new());
         encoder.write_all(data).unwrap();

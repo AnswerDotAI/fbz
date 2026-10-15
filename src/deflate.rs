@@ -26,8 +26,6 @@ pub fn compress_bytes_serial(data: &[u8], level: u8) -> Result<(Vec<u8>, EncodeR
 /// Decode one raw DEFLATE stream into an output sink.
 #[doc(hidden)]
 pub fn decompress_to_sink_with_options_and_progress(
-    data: &[u8],
-    output: &mut impl OutputSink,
-    options: DecodeOptions,
-    progress: impl FnMut(DecodeProgress),
-) -> Result<Report> { gzip::decompress_deflate_to_sink_with_options_and_progress(data, output, options, progress) }
+    data: &[u8], output: &mut impl OutputSink, options: DecodeOptions, progress: impl FnMut(DecodeProgress)) -> Result<Report> {
+    gzip::decompress_deflate_to_sink_with_options_and_progress(data, output, options, progress)
+}

@@ -16,12 +16,7 @@ const END_PREFIX: [u8; 256] = prefix_table(END_MAGIC);
 pub struct StreamHeaderCandidate { pub byte_offset: u64, pub block_size_100k: u8 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BlockCandidate {
-    pub bit_offset: u64,
-    pub expected_crc: u32,
-    pub randomized: bool,
-    pub orig_ptr: u32,
-}
+pub struct BlockCandidate { pub bit_offset: u64, pub expected_crc: u32, pub randomized: bool, pub orig_ptr: u32 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EndCandidate { pub bit_offset: u64, pub expected_stream_crc: u32 }
@@ -62,10 +57,8 @@ pub(crate) fn scan_with_pool(data: &[u8], pool: Option<&ThreadPool>, mut cancell
 }
 
 fn scan_range(data: &[u8], start: usize, end: usize) -> ScanResult {
-    let streams = (start..end)
-        .filter(|&offset| is_stream_header(data, offset))
-        .map(|offset| StreamHeaderCandidate { byte_offset: offset as u64, block_size_100k: data[offset + 3] - b'0' })
-        .collect();
+    let streams = (start..end).filter(|&offset| is_stream_header(data, offset))
+        .map(|offset| StreamHeaderCandidate { byte_offset: offset as u64, block_size_100k: data[offset + 3] - b'0' }).collect();
     let mut blocks = Vec::new();
     let mut stream_ends = Vec::new();
 
@@ -79,9 +72,9 @@ fn scan_range(data: &[u8], start: usize, end: usize) -> ScanResult {
             shifts &= shifts - 1;
             let marker = (window >> (8 - shift)) & MAGIC_MASK;
             let bit_offset = byte_offset as u64 * 8 + u64::from(shift);
-            if marker == BLOCK_MAGIC { if let Some(block) = parse_block(data, bit_offset) { blocks.push(block); } } else if marker == END_MAGIC
-                && let Some(end) = parse_end(data, bit_offset)
-            { stream_ends.push(end); }
+            if marker == BLOCK_MAGIC {
+                if let Some(block) = parse_block(data, bit_offset) { blocks.push(block); }
+            } else if marker == END_MAGIC && let Some(end) = parse_end(data, bit_offset) { stream_ends.push(end); }
         }
         window = ((window << 8) & WINDOW_MASK) | u64::from(byte_at(data, byte_offset + 7));
     }
@@ -111,12 +104,8 @@ fn is_stream_header(data: &[u8], offset: usize) -> bool { data.get(offset..offse
 
 fn parse_block(data: &[u8], bit_offset: u64) -> Option<BlockCandidate> {
     let mut reader = BitReader::at(data, bit_offset + u64::from(MAGIC_BITS)).ok()?;
-    Some(BlockCandidate {
-        bit_offset,
-        expected_crc: reader.read_bits(32).ok()? as u32,
-        randomized: reader.read_bit().ok()?,
-        orig_ptr: reader.read_bits(24).ok()? as u32,
-    })
+    Some(BlockCandidate { bit_offset, expected_crc: reader.read_bits(32).ok()? as u32, randomized: reader.read_bit().ok()?,
+        orig_ptr: reader.read_bits(24).ok()? as u32 })
 }
 
 fn parse_end(data: &[u8], bit_offset: u64) -> Option<EndCandidate> {

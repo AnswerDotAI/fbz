@@ -42,10 +42,7 @@ impl Splitter {
     /// Feed one byte. Returns the group that just closed, if any.
     #[inline]
     pub fn push(&mut self, b: u8) -> Option<Group> {
-        if self.len > 0 && b == self.byte && self.len < MAX_RUN {
-            self.len += 1;
-            return None;
-        }
+        if self.len > 0 && b == self.byte && self.len < MAX_RUN { self.len += 1; return None; }
         let done = self.take();
         self.byte = b;
         self.len = 1;

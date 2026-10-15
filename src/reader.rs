@@ -1,9 +1,4 @@
-use std::{
-    io::{self, Read},
-    path::Path,
-    sync::mpsc::{Receiver, sync_channel},
-    thread::{self, JoinHandle},
-};
+use std::{io::{self, Read}, path::Path, sync::mpsc::{Receiver, sync_channel}, thread::{self, JoinHandle}};
 
 use crate::{DecodeOptions, Error, Format, PipeReader, Result, Source, decode_stream_to_sink_with_progress, output_pipe};
 
@@ -24,12 +19,7 @@ enum State { Reading, Eof, Failed(StoredError) }
 /// A corrupt trailer can therefore produce decoded bytes before a later call to
 /// `read` returns an error. Dropping before EOF cancels decoding without
 /// completing validation.
-pub struct Reader {
-    pipe: Option<PipeReader>,
-    result: Option<Receiver<Result<()>>>,
-    worker: Option<JoinHandle<()>>,
-    state: State,
-}
+pub struct Reader { pipe: Option<PipeReader>, result: Option<Receiver<Result<()>>>, worker: Option<JoinHandle<()>>, state: State }
 
 impl Reader {
     /// Open a bzip2, gzip, or LZ4 file and start its decoder coordinator.
@@ -48,14 +38,11 @@ impl Reader {
 
         let (mut output, pipe) = output_pipe();
         let (result_sender, result) = sync_channel(1);
-        let worker = thread::Builder::new()
-            .name("fbz-reader".into())
-            .spawn(move || {
-                let decoded = decode_stream_to_sink_with_progress(format, source.as_slice(), &mut output, options, |_| {});
-                drop(output);
-                let _ = result_sender.send(decoded);
-            })
-            .map_err(Error::from)?;
+        let worker = thread::Builder::new().name("fbz-reader".into()).spawn(move || {
+            let decoded = decode_stream_to_sink_with_progress(format, source.as_slice(), &mut output, options, |_| {});
+            drop(output);
+            let _ = result_sender.send(decoded);
+        }).map_err(Error::from)?;
         Ok(Self { pipe: Some(pipe), result: Some(result), worker: Some(worker), state: State::Reading })
     }
 
@@ -77,13 +64,7 @@ impl Reader {
         let joined = self.join_worker();
         match result {
             Err(error) => Err(self.fail(read_error(error))),
-            Ok(()) => match joined {
-                Ok(()) => {
-                    self.state = State::Eof;
-                    Ok(())
-                }
-                Err(error) => Err(self.fail(error)),
-            },
+            Ok(()) => match joined { Ok(()) => { self.state = State::Eof; Ok(()) } Err(error) => Err(self.fail(error)) },
         }
     }
 
@@ -103,8 +84,7 @@ impl Read for Reader {
             let count = self.pipe.as_mut().expect("reading state must own its pipe").read(buffer)?;
             if count != 0 { return Ok(count); }
             let result = match self.result.as_ref().expect("reading state must own its result receiver").recv() {
-                Ok(result) => result,
-                Err(_) => return Err(self.disconnected()),
+                Ok(result) => result, Err(_) => return Err(self.disconnected())
             };
             self.finish(result)?;
         }
@@ -121,8 +101,7 @@ impl Drop for Reader {
 
 fn read_error(error: Error) -> io::Error {
     match error {
-        Error::Io(error) => error,
-        Error::InvalidConfiguration(message) => io::Error::new(io::ErrorKind::InvalidInput, message),
-        error => io::Error::new(io::ErrorKind::InvalidData, error),
+        Error::Io(error) => error, Error::InvalidConfiguration(message) => io::Error::new(io::ErrorKind::InvalidInput, message),
+        error => io::Error::new(io::ErrorKind::InvalidData, error)
     }
 }

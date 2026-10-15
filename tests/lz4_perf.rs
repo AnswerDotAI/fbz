@@ -54,15 +54,11 @@ fn lz4_cli_comparison() {
     assert!(ours.status.success());
     assert!(reference.status.success());
     eprintln!(
-        "fbz LZ4: {:.3} ms, peak RSS {:.1} MiB, physical {:.1} MiB",
-        ours.wall.as_secs_f64() * 1_000.0,
-        ours.peak_rss_bytes as f64 / 1_048_576.0,
+        "fbz LZ4: {:.3} ms, peak RSS {:.1} MiB, physical {:.1} MiB", ours.wall.as_secs_f64() * 1_000.0, ours.peak_rss_bytes as f64 / 1_048_576.0,
         ours.peak_phys_footprint_bytes.map_or(f64::NAN, |bytes| bytes as f64 / 1_048_576.0),
     );
     eprintln!(
-        "lz4 1.10.0: {:.3} ms, peak RSS {:.1} MiB, physical {:.1} MiB",
-        reference.wall.as_secs_f64() * 1_000.0,
-        reference.peak_rss_bytes as f64 / 1_048_576.0,
+        "lz4 1.10.0: {:.3} ms, peak RSS {:.1} MiB, physical {:.1} MiB", reference.wall.as_secs_f64() * 1_000.0, reference.peak_rss_bytes as f64 / 1_048_576.0,
         reference.peak_phys_footprint_bytes.map_or(f64::NAN, |bytes| bytes as f64 / 1_048_576.0),
     );
     let ratio = ours.wall.as_secs_f64() / reference.wall.as_secs_f64();
@@ -84,11 +80,7 @@ fn lz4_thread_sweep() {
 }
 
 fn frame(contents: &[u8], block_size: BlockSize) -> Vec<u8> {
-    let info = FrameInfo::new()
-        .block_size(block_size)
-        .block_mode(BlockMode::Independent)
-        .block_checksums(false)
-        .content_checksum(false)
+    let info = FrameInfo::new().block_size(block_size).block_mode(BlockMode::Independent).block_checksums(false).content_checksum(false)
         .content_size(Some(contents.len() as u64));
     let mut encoder = FrameEncoder::with_frame_info(info, Vec::new());
     encoder.write_all(contents).unwrap();
@@ -114,14 +106,12 @@ fn lz4_shape_diagnostics() {
     assert!(repeated_report.blocks.iter().any(|block| !block.stored));
 
     let mut state = 0x9e37_79b9_u32;
-    let random: Vec<_> = (0..16 * 1024 * 1024)
-        .map(|_| {
-            state ^= state << 13;
-            state ^= state >> 17;
-            state ^= state << 5;
-            state as u8
-        })
-        .collect();
+    let random: Vec<_> = (0..16 * 1024 * 1024).map(|_| {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        state as u8
+    }).collect();
     let stored_frame = frame(&random, BlockSize::Max4MB);
     timed_decode(&stored_frame, 1);
     timed_decode(&stored_frame, 4);
@@ -130,9 +120,7 @@ fn lz4_shape_diagnostics() {
     assert!(serial_report.blocks.iter().all(|block| block.stored));
     assert!(parallel_report.blocks.iter().all(|block| block.stored));
     eprintln!(
-        "long match: {:.3} ms; stored serial: {:.3} ms; stored four-thread: {:.3} ms",
-        repeated_time.as_secs_f64() * 1_000.0,
-        stored_serial.as_secs_f64() * 1_000.0,
-        stored_parallel.as_secs_f64() * 1_000.0,
+        "long match: {:.3} ms; stored serial: {:.3} ms; stored four-thread: {:.3} ms", repeated_time.as_secs_f64() * 1_000.0,
+        stored_serial.as_secs_f64() * 1_000.0, stored_parallel.as_secs_f64() * 1_000.0,
     );
 }

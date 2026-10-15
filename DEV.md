@@ -87,7 +87,7 @@ ship-rs-build
 
 The published `fbz` crate has no Python dependency. The unpublished `fbz-py` crate in `py/` builds the extension. `cargo develop` installs the extension and native CLI into the active venv using the same Cargo profile as bare `cargo test`. The shared `fastws.build_backend` stages native executables for wheel builds.
 
-Run `cargo fmt --check` after Rust edits and `chkstyle` after Python edits once tests pass.
+Run `cargo fastfmt` after Rust edits and `chkstyle` after Python edits once tests pass.
 
 ## Correctness and performance acceptance
 

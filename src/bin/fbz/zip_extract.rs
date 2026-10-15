@@ -1,13 +1,7 @@
 use std::{
-    collections::HashMap,
-    fs,
-    io::{self, Cursor},
-    path::{Component, Path, PathBuf},
-    sync::{
-        Mutex,
-        atomic::{AtomicU64, AtomicUsize, Ordering},
-    },
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    collections::HashMap, fs, io::{self, Cursor}, path::{Component, Path, PathBuf}, sync::{
+        Mutex, atomic::{AtomicU64, AtomicUsize, Ordering}
+    }, time::{Duration, SystemTime, UNIX_EPOCH}
 };
 
 use fbz::{DecodeOptions, DecodeProgress, Error, OutputSink, Result, WriterSink, deflate, gzip};
@@ -24,17 +18,8 @@ enum EntryKind { File, Directory, Symlink }
 
 #[derive(Clone, Debug)]
 pub(super) struct Entry {
-    pub path: PathBuf,
-    pub compression_method: u16,
-    pub compressed_size: u64,
-    pub decoded_size: u64,
-    pub crc: u32,
-    method: CompressionMethod,
-    data_start: usize,
-    data_end: usize,
-    mode: Option<u32>,
-    modified: Option<SystemTime>,
-    kind: EntryKind,
+    pub path: PathBuf, pub compression_method: u16, pub compressed_size: u64, pub decoded_size: u64, pub crc: u32, method: CompressionMethod, data_start: usize,
+    data_end: usize, mode: Option<u32>, modified: Option<SystemTime>, kind: EntryKind
 }
 
 #[derive(Clone, Debug)]
@@ -65,12 +50,8 @@ fn central_entry_count(data: &[u8], start: u64) -> Result<usize> {
         let name_len = u16::from_le_bytes(header[28..30].try_into().unwrap()) as usize;
         let extra_len = u16::from_le_bytes(header[30..32].try_into().unwrap()) as usize;
         let comment_len = u16::from_le_bytes(header[32..34].try_into().unwrap()) as usize;
-        position = position
-            .checked_add(46)
-            .and_then(|value| value.checked_add(name_len))
-            .and_then(|value| value.checked_add(extra_len))
-            .and_then(|value| value.checked_add(comment_len))
-            .filter(|&value| value <= data.len())
+        position = position.checked_add(46).and_then(|value| value.checked_add(name_len)).and_then(|value| value.checked_add(extra_len))
+            .and_then(|value| value.checked_add(comment_len)).filter(|&value| value <= data.len())
             .ok_or_else(|| invalid("central directory entry exceeds the archive"))?;
         count += 1;
     }
@@ -98,25 +79,12 @@ fn parse(data: &[u8], max_output: Option<usize>) -> Result<Report> {
         let data_end = data_end_u64 as usize;
         let kind = if file.is_dir() { EntryKind::Directory } else if file.is_symlink() { EntryKind::Symlink } else { EntryKind::File };
         decoded_len = decoded_len.checked_add(file.size()).ok_or_else(|| invalid("total decoded size overflows u64"))?;
-        if let Some(limit) = max_output
-            && decoded_len > limit as u64
-        { return Err(invalid(format!("decoded output exceeds {limit} bytes"))); }
+        if let Some(limit) = max_output && decoded_len > limit as u64 { return Err(invalid(format!("decoded output exceeds {limit} bytes"))); }
         let method = file.compression();
         #[allow(deprecated)]
         let compression_method = method.to_u16();
-        entries.push(Entry {
-            path,
-            compression_method,
-            compressed_size: file.compressed_size(),
-            decoded_size: file.size(),
-            crc: file.crc32(),
-            method,
-            data_start,
-            data_end,
-            mode: file.unix_mode(),
-            modified: modified_time(&file),
-            kind,
-        });
+        entries.push(Entry { path, compression_method, compressed_size: file.compressed_size(), decoded_size: file.size(), crc: file.crc32(), method,
+            data_start, data_end, mode: file.unix_mode(), modified: modified_time(&file), kind });
     }
     validate_layout(&entries)?;
     Ok(Report { source_len: data.len() as u64, decoded_len, entries })
@@ -195,12 +163,16 @@ fn decode_entry(data: &[u8], entry: &Entry, output: &mut impl OutputSink, option
         let report =
             deflate::decompress_to_sink_with_options_and_progress(compressed, &mut output, options, progress).map_err(|error| entry_error(entry, error))?;
         (report.decoded_len, report.crc)
-    } else { return Err(invalid(format!("entry {} uses unsupported compression method {}", entry.path.display(), entry.compression_method))); };
+    } else {
+        return Err(invalid(format!("entry {} uses unsupported compression method {}", entry.path.display(), entry.compression_method)));
+    };
     output.flush()?;
     if decoded_size != entry.decoded_size {
         return Err(invalid(format!("entry {} size mismatch: expected {}, decoded {decoded_size}", entry.path.display(), entry.decoded_size)));
     }
-    if crc != entry.crc { return Err(invalid(format!("entry {} CRC32 mismatch: expected {:08x}, decoded {crc:08x}", entry.path.display(), entry.crc))); }
+    if crc != entry.crc {
+        return Err(invalid(format!("entry {} CRC32 mismatch: expected {:08x}, decoded {crc:08x}", entry.path.display(), entry.crc)));
+    }
     Ok(())
 }
 
@@ -211,15 +183,8 @@ fn uses_intra_entry(entry: &Entry, entry_count: usize) -> bool {
 }
 
 fn run_entries<P>(
-    entries: &[Entry],
-    source_len: u64,
-    options: DecodeOptions,
-    run: impl Fn(&Entry, DecodeOptions, &mut dyn FnMut(DecodeProgress)) -> Result<()> + Sync,
-    progress: P,
-) -> Result<()>
-where
-    P: FnMut(DecodeProgress) + Send,
-{
+    entries: &[Entry], source_len: u64, options: DecodeOptions, run: impl Fn(&Entry, DecodeOptions, &mut dyn FnMut(DecodeProgress)) -> Result<()> + Sync,
+    progress: P) -> Result<()> where P: FnMut(DecodeProgress) + Send {
     let threads = options.resolved_threads();
     let compressed = AtomicU64::new(0);
     let decoded = AtomicU64::new(0);
@@ -250,23 +215,17 @@ where
     let (within, across): (Vec<_>, Vec<_>) = entries.iter().partition(|entry| uses_intra_entry(entry, entries.len()));
     for entry in within { run(entry, DecodeOptions { threads, ..options })?; }
     if across.is_empty() { return Ok(()); }
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(threads)
-        .thread_name(|index| format!("fbz-zip-{index}"))
-        .build()
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).thread_name(|index| format!("fbz-zip-{index}")).build()
         .map_err(|error| invalid(error.to_string()))?;
     pool.install(|| across.par_iter().try_for_each(|entry| run(entry, DecodeOptions { threads: 1, ..options })))
 }
 
 pub(super) fn validate(data: &[u8], options: DecodeOptions, max_output: Option<usize>, progress: impl FnMut(DecodeProgress) + Send) -> Result<Report> {
     let report = parse(data, max_output)?;
-    run_entries(
-        &report.entries,
-        report.source_len,
-        options,
-        |entry, entry_options, progress| { let mut output = WriterSink::new(io::sink()); decode_entry(data, entry, &mut output, entry_options, progress) },
-        progress,
-    )?;
+    run_entries(&report.entries, report.source_len, options, |entry, entry_options, progress| {
+        let mut output = WriterSink::new(io::sink());
+        decode_entry(data, entry, &mut output, entry_options, progress)
+    }, progress)?;
     Ok(report)
 }
 
@@ -280,10 +239,7 @@ fn prepare_directories(root: &Path, entries: &[Entry]) -> Result<()> {
 
 #[cfg(unix)]
 fn create_symlink(root: &Path, entry: &Entry, target: &[u8]) -> Result<()> {
-    use std::{
-        ffi::OsStr,
-        os::unix::{ffi::OsStrExt, fs::symlink},
-    };
+    use std::{ffi::OsStr, os::unix::{ffi::OsStrExt, fs::symlink}};
 
     let target = Path::new(OsStr::from_bytes(target));
     if target.is_absolute() { return Err(invalid(format!("entry {} has absolute symlink target {}", entry.path.display(), target.display()))); }
@@ -341,23 +297,14 @@ fn set_mode(path: &Path, mode: Option<u32>) -> Result<()> {
 fn set_mode(_path: &Path, _mode: Option<u32>) -> Result<()> { Ok(()) }
 
 pub(super) fn unpack(
-    data: &[u8],
-    destination: &Path,
-    overwrite: bool,
-    options: DecodeOptions,
-    max_output: Option<usize>,
-    progress: impl FnMut(DecodeProgress) + Send,
+    data: &[u8], destination: &Path, overwrite: bool, options: DecodeOptions, max_output: Option<usize>, progress: impl FnMut(DecodeProgress) + Send
 ) -> Result<Report> {
     let report = parse(data, max_output)?;
     let staging = archive_extract::staging(destination)?;
     prepare_directories(staging.path(), &report.entries)?;
     run_entries(
-        &report.entries,
-        report.source_len,
-        options,
-        |entry, entry_options, progress| extract_entry(data, staging.path(), entry, entry_options, progress),
-        progress,
-    )?;
+        &report.entries, report.source_len, options, |entry, entry_options, progress| extract_entry(data, staging.path(), entry, entry_options, progress),
+        progress)?;
     let mut directories: Vec<_> = report.entries.iter().filter(|entry| entry.kind == EntryKind::Directory).collect();
     directories.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.path.components().count()));
     for entry in directories {

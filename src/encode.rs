@@ -1,9 +1,4 @@
-use std::{
-    cell::Cell,
-    io::{self, Read, Write},
-    rc::Rc,
-    thread,
-};
+use std::{cell::Cell, io::{self, Read, Write}, rc::Rc, thread};
 
 use crate::{Bzip2Encoder, Error, Result, decode::DEFAULT_MEMORY_LIMIT, gzip, lz4};
 
@@ -48,22 +43,18 @@ impl<W: Write> Encoder<W> {
     pub fn new(output: W, format: EncodeFormat, options: EncodeOptions) -> Result<Self> {
         match format {
             EncodeFormat::Bzip2 => Bzip2Encoder::new(output, options).map(Self::Bzip2),
-            EncodeFormat::Gzip => gzip::Encoder::new(output, options).map(Self::Gzip),
-            EncodeFormat::Lz4 => lz4::Encoder::new(output, options).map(Self::Lz4),
+            EncodeFormat::Gzip => gzip::Encoder::new(output, options).map(Self::Gzip), EncodeFormat::Lz4 => lz4::Encoder::new(output, options).map(Self::Lz4)
         }
     }
 
     pub fn finish(self) -> Result<(W, EncodeReport)> {
         match self {
-            Self::Bzip2(encoder) => encoder
-                .finish()
+            Self::Bzip2(encoder) => encoder.finish()
                 .map(|(output, report)| (output, EncodeReport { format: EncodeFormat::Bzip2, input_len: report.input_len, output_len: report.output_len })),
-            Self::Gzip(encoder) => encoder
-                .finish()
+            Self::Gzip(encoder) => encoder.finish()
                 .map(|(output, report)| (output, EncodeReport { format: EncodeFormat::Gzip, input_len: report.input_len, output_len: report.output_len })),
-            Self::Lz4(encoder) => encoder
-                .finish()
-                .map(|(output, report)| (output, EncodeReport { format: EncodeFormat::Lz4, input_len: report.input_len, output_len: report.output_len })),
+            Self::Lz4(encoder) => encoder.finish()
+                .map(|(output, report)| (output, EncodeReport { format: EncodeFormat::Lz4, input_len: report.input_len, output_len: report.output_len }))
         }
     }
 }
@@ -101,11 +92,7 @@ impl<W: Write> Write for CountingWriter<'_, W> {
 }
 
 pub fn compress_to_writer_with_progress(
-    input: &mut impl Read,
-    output: &mut impl Write,
-    format: EncodeFormat,
-    options: EncodeOptions,
-    mut progress: impl FnMut(EncodeProgress),
+    input: &mut impl Read, output: &mut impl Write, format: EncodeFormat, options: EncodeOptions, mut progress: impl FnMut(EncodeProgress)
 ) -> Result<EncodeReport> {
     let written = Rc::new(Cell::new(0));
     let mut counted = CountingWriter { inner: output, written: Rc::clone(&written) };

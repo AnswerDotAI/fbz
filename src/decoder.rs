@@ -59,14 +59,7 @@ impl<'a> Bits<'a> {
     fn align_byte(&mut self) { self.bit = (self.bit + 7) & !7; }
 }
 
-struct Huffman {
-    min_len: u8,
-    max_len: u8,
-    limit: [i32; MAX_CODE_LEN + 1],
-    base: [i32; MAX_CODE_LEN + 1],
-    symbols: Vec<u16>,
-    lut: Box<[u32; LUT_SIZE]>,
-}
+struct Huffman { min_len: u8, max_len: u8, limit: [i32; MAX_CODE_LEN + 1], base: [i32; MAX_CODE_LEN + 1], symbols: Vec<u16>, lut: Box<[u32; LUT_SIZE]> }
 
 impl Huffman {
     fn build(lengths: &[u8], bit_offset: u64) -> Result<Self> {
@@ -123,10 +116,7 @@ impl Huffman {
         if bits.remaining() >= usize::from(LUT_BITS) {
             let entry = self.lut[bits.peek(LUT_BITS)? as usize];
             let length = (entry >> 16) as u8;
-            if length != 0 {
-                bits.skip(length);
-                return Ok((entry & 0xffff) as usize);
-            }
+            if length != 0 { bits.skip(length); return Ok((entry & 0xffff) as usize); }
         }
 
         let mut length = self.min_len;
@@ -134,9 +124,7 @@ impl Huffman {
         loop {
             if code <= self.limit[usize::from(length)] {
                 let index = code - self.base[usize::from(length)];
-                if index >= 0
-                    && let Some(&symbol) = self.symbols.get(index as usize)
-                { return Ok(usize::from(symbol)); }
+                if index >= 0 && let Some(&symbol) = self.symbols.get(index as usize) { return Ok(usize::from(symbol)); }
                 return Err(decode_error(bits.position(), DecodeError::InvalidHuffman));
             }
             if length == self.max_len { return Err(decode_error(bits.position(), DecodeError::InvalidHuffman)); }
@@ -148,12 +136,7 @@ impl Huffman {
 
 struct Decoder { tt: Vec<u32> }
 
-pub(crate) struct DecodedCandidate {
-    pub output: Vec<u8>,
-    pub decoded_len: usize,
-    pub end_bit: u64,
-    pub block_len: usize,
-}
+pub(crate) struct DecodedCandidate { pub output: Vec<u8>, pub decoded_len: usize, pub end_bit: u64, pub block_len: usize }
 
 impl Decoder {
     fn new() -> Self { Self { tt: Vec::new() } }
@@ -341,10 +324,7 @@ pub(crate) fn decode_serial_with_progress(data: &[u8], output: &mut impl OutputS
                     progress(bits.position().div_ceil(8), decoded_bytes);
                     combined_crc = combine_stream_crc(combined_crc, crc);
                 }
-                END_MAGIC => {
-                    if bits.read(32)? != combined_crc { return Err(decode_error(marker_offset, DecodeError::CrcMismatch)); }
-                    break;
-                }
+                END_MAGIC => { if bits.read(32)? != combined_crc { return Err(decode_error(marker_offset, DecodeError::CrcMismatch)); } break; }
                 _ => return Err(decode_error(marker_offset, DecodeError::InvalidMagic)),
             }
         }

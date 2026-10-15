@@ -1,8 +1,4 @@
-use std::{
-    fs,
-    io::{Read, Write},
-    path::Path,
-};
+use std::{fs, io::{Read, Write}, path::Path};
 
 use crabz2::{Level, compress};
 use fbz::{DecodeFormat, DecodeOptions, Error, Reader};
@@ -35,9 +31,7 @@ fn reader_detects_stream_formats_without_prevalidation() {
     let directory = tempfile::tempdir().unwrap();
     let plain = b"streaming reader format detection ".repeat(20_000);
     let cases = [
-        ("bzip-magic.data", compress(&plain, Level::FASTEST)),
-        ("gzip-magic.bz2", gzip(&plain)),
-        ("lz4-magic.gz", lz4(&plain, BlockMode::Independent)),
+        ("bzip-magic.data", compress(&plain, Level::FASTEST)), ("gzip-magic.bz2", gzip(&plain)), ("lz4-magic.gz", lz4(&plain, BlockMode::Independent)),
         ("lz4-linked.data", lz4(&plain, BlockMode::Linked)),
     ];
     for (name, encoded) in cases {
@@ -140,8 +134,7 @@ fn bzip2_failure_does_not_turn_a_valid_prefix_into_eof() {
 fn dropping_under_backpressure_joins_the_decoder() {
     let directory = tempfile::tempdir().unwrap();
     let inputs = [
-        ("early-drop.gz", gzip(&vec![7; 4 * 1024 * 1024]), 1),
-        ("early-drop.bz2", compress(&vec![9; 2 * 1024 * 1024], Level::FASTEST), 4),
+        ("early-drop.gz", gzip(&vec![7; 4 * 1024 * 1024]), 1), ("early-drop.bz2", compress(&vec![9; 2 * 1024 * 1024], Level::FASTEST), 4),
         ("early-drop.lz4", lz4(&vec![11; 8 * 1024 * 1024], BlockMode::Independent), 4),
     ];
     for (name, encoded, threads) in inputs {

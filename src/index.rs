@@ -8,34 +8,17 @@ const CHECKSUM_LEN: usize = 32;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockIndex {
-    pub compressed_start_bit: u64,
-    pub compressed_end_bit: u64,
-    pub decoded_start: u64,
-    pub decoded_len: u64,
-    pub expected_crc: u32,
-    pub stream: u64,
+    pub compressed_start_bit: u64, pub compressed_end_bit: u64, pub decoded_start: u64, pub decoded_len: u64, pub expected_crc: u32, pub stream: u64
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StreamIndex {
-    pub compressed_header_byte: u64,
-    pub block_size_100k: u8,
-    pub first_block: u64,
-    pub block_count: u64,
-    pub decoded_start: u64,
-    pub decoded_len: u64,
-    pub eos_bit: u64,
-    pub expected_stream_crc: u32,
+    pub compressed_header_byte: u64, pub block_size_100k: u8, pub first_block: u64, pub block_count: u64, pub decoded_start: u64, pub decoded_len: u64,
+    pub eos_bit: u64, pub expected_stream_crc: u32
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Index {
-    pub source_len: u64,
-    pub source_hash: [u8; 32],
-    pub decoded_len: u64,
-    pub streams: Vec<StreamIndex>,
-    pub blocks: Vec<BlockIndex>,
-}
+pub struct Index { pub source_len: u64, pub source_hash: [u8; 32], pub decoded_len: u64, pub streams: Vec<StreamIndex>, pub blocks: Vec<BlockIndex> }
 
 impl Index {
     pub(crate) fn new(source: &[u8], decoded_len: u64, streams: Vec<StreamIndex>, blocks: Vec<BlockIndex>) -> Self {
@@ -87,35 +70,20 @@ impl Index {
         let stream_count = reader.usize("stream count")?;
         let block_count = reader.usize("block count")?;
         if source_len != source.len() as u64 || source_hash != *blake3::hash(source).as_bytes() { return Err(invalid("source identity mismatch")); }
-        let required = stream_count
-            .checked_mul(53)
-            .and_then(|size| block_count.checked_mul(44).and_then(|blocks| size.checked_add(blocks)))
+        let required = stream_count.checked_mul(53).and_then(|size| block_count.checked_mul(44).and_then(|blocks| size.checked_add(blocks)))
             .ok_or_else(|| invalid("record counts overflow"))?;
         if reader.remaining() != required { return Err(invalid("record counts do not match payload length")); }
 
         let mut streams = Vec::with_capacity(stream_count);
         for _ in 0..stream_count {
-            streams.push(StreamIndex {
-                compressed_header_byte: reader.u64()?,
-                block_size_100k: reader.byte()?,
-                first_block: reader.u64()?,
-                block_count: reader.u64()?,
-                decoded_start: reader.u64()?,
-                decoded_len: reader.u64()?,
-                eos_bit: reader.u64()?,
-                expected_stream_crc: reader.u32()?,
+            streams.push(StreamIndex { compressed_header_byte: reader.u64()?, block_size_100k: reader.byte()?, first_block: reader.u64()?,
+                block_count: reader.u64()?, decoded_start: reader.u64()?, decoded_len: reader.u64()?, eos_bit: reader.u64()?, expected_stream_crc: reader.u32()?
             });
         }
         let mut blocks = Vec::with_capacity(block_count);
         for _ in 0..block_count {
-            blocks.push(BlockIndex {
-                compressed_start_bit: reader.u64()?,
-                compressed_end_bit: reader.u64()?,
-                decoded_start: reader.u64()?,
-                decoded_len: reader.u64()?,
-                expected_crc: reader.u32()?,
-                stream: reader.u64()?,
-            });
+            blocks.push(BlockIndex { compressed_start_bit: reader.u64()?, compressed_end_bit: reader.u64()?, decoded_start: reader.u64()?,
+                decoded_len: reader.u64()?, expected_crc: reader.u32()?, stream: reader.u64()? });
         }
         let index = Self { source_len, source_hash, decoded_len, streams, blocks };
         index.validate()?;
@@ -144,11 +112,8 @@ impl Index {
         let mut first_block = 0_u64;
         let mut stream_decoded = 0_u64;
         for (number, stream) in self.streams.iter().enumerate() {
-            if !(1..=9).contains(&stream.block_size_100k)
-                || stream.first_block != first_block
-                || stream.decoded_start != stream_decoded
-                || stream.eos_bit > source_bits
-            { return Err(invalid("stream record is inconsistent")); }
+            if !(1..=9).contains(&stream.block_size_100k) || stream.first_block != first_block || stream.decoded_start != stream_decoded
+                || stream.eos_bit > source_bits { return Err(invalid("stream record is inconsistent")); }
             let end = stream.first_block.checked_add(stream.block_count).ok_or_else(|| invalid("stream block count overflow"))?;
             if end as usize > self.blocks.len() { return Err(invalid("stream block range is out of bounds")); }
             for block in &self.blocks[stream.first_block as usize..end as usize] {

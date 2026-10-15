@@ -1,9 +1,4 @@
-use std::{
-    fs,
-    io::{self, Write},
-    process::Command,
-    time::{Duration, Instant},
-};
+use std::{fs, io::{self, Write}, process::Command, time::{Duration, Instant}};
 
 use crabz2::{Level, compress};
 use fbz::{DecodeOptions, OutputSink, gzip as gzip_decoder};
@@ -147,12 +142,8 @@ fn tgz_output_cadence() {
     assert_eq!(output.bytes, archive.len());
     assert_eq!(report.decoded_len, archive.len() as u64);
     eprintln!(
-        "gzip {threads} threads, {} chunks: first {:.3?}, 25% {:.3?}, 50% {:.3?}, 75% {:.3?}, complete {elapsed:.3?}",
-        output.events.len(),
-        output.events[0].1,
-        output.milestone(archive.len() / 4),
-        output.milestone(archive.len() / 2),
-        output.milestone(archive.len() * 3 / 4),
+        "gzip {threads} threads, {} chunks: first {:.3?}, 25% {:.3?}, 50% {:.3?}, 75% {:.3?}, complete {elapsed:.3?}", output.events.len(), output.events[0].1,
+        output.milestone(archive.len() / 4), output.milestone(archive.len() / 2), output.milestone(archive.len() * 3 / 4),
     );
 }
 

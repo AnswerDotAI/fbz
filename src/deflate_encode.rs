@@ -1,16 +1,9 @@
-use std::{
-    cmp::Reverse,
-    collections::BinaryHeap,
-    io::{self, Read, Write},
-};
+use std::{cmp::Reverse, collections::BinaryHeap, io::{self, Read, Write}};
 
 use crc32fast::Hasher;
 
 use crate::{
-    EncodeOptions, Error, Result,
-    deflate::{DISTANCE_BASE, DISTANCE_EXTRA, LENGTH_BASE, LENGTH_EXTRA},
-    matchfinder::HashChain,
-    pipeline::StreamingOrdered,
+    EncodeOptions, Error, Result, deflate::{DISTANCE_BASE, DISTANCE_EXTRA, LENGTH_BASE, LENGTH_EXTRA}, matchfinder::HashChain, pipeline::StreamingOrdered
 };
 
 const WINDOW_SIZE: usize = 32 * 1024;
@@ -57,11 +50,8 @@ fn reverse_code(code: u16, bits: u8) -> u16 { code.reverse_bits() >> (16 - bits)
 
 fn fixed_code(symbol: usize) -> (u16, u8) {
     match symbol {
-        0..=143 => (reverse_code(0x30 + symbol as u16, 8), 8),
-        144..=255 => (reverse_code(0x190 + (symbol - 144) as u16, 9), 9),
-        256..=279 => (reverse_code((symbol - 256) as u16, 7), 7),
-        280..=287 => (reverse_code(0xc0 + (symbol - 280) as u16, 8), 8),
-        _ => unreachable!(),
+        0..=143 => (reverse_code(0x30 + symbol as u16, 8), 8), 144..=255 => (reverse_code(0x190 + (symbol - 144) as u16, 9), 9),
+        256..=279 => (reverse_code((symbol - 256) as u16, 7), 7), 280..=287 => (reverse_code(0xc0 + (symbol - 280) as u16, 8), 8), _ => unreachable!()
     }
 }
 
@@ -194,16 +184,13 @@ fn huffman_codes(lengths: &[u8], max_bits: u8) -> Vec<u16> {
         code = (code + counts[bits - 1]) << 1;
         next[bits] = code;
     }
-    lengths
-        .iter()
-        .map(|&length| {
-            if length == 0 { 0 } else {
-                let code = next[length as usize];
-                next[length as usize] += 1;
-                reverse_code(code, length)
-            }
-        })
-        .collect()
+    lengths.iter().map(|&length| {
+        if length == 0 { 0 } else {
+            let code = next[length as usize];
+            next[length as usize] += 1;
+            reverse_code(code, length)
+        }
+    }).collect()
 }
 
 fn frequencies(tokens: &[Token]) -> ([u32; 286], [u32; 30]) {
@@ -354,16 +341,8 @@ pub(crate) fn compress_bytes_serial(data: &[u8], level: u8) -> (Vec<u8>, EncodeR
 }
 
 pub struct Encoder<W: Write> {
-    output: Option<W>,
-    options: EncodeOptions,
-    pipeline: StreamingOrdered<Result<Segment>>,
-    buffer: Vec<u8>,
-    prefix_len: usize,
-    segment_size: usize,
-    reservation: usize,
-    crc: Hasher,
-    input_len: u64,
-    output_len: u64,
+    output: Option<W>, options: EncodeOptions, pipeline: StreamingOrdered<Result<Segment>>, buffer: Vec<u8>, prefix_len: usize, segment_size: usize,
+    reservation: usize, crc: Hasher, input_len: u64, output_len: u64
 }
 
 impl<W: Write> Encoder<W> {
@@ -373,18 +352,8 @@ impl<W: Write> Encoder<W> {
         let segment_size = segment_size(options.memory_limit)?;
         let reservation = reservation(segment_size);
         let workers = options.resolved_threads().min((options.memory_limit / reservation).max(1));
-        Ok(Self {
-            output: Some(output),
-            options,
-            pipeline: StreamingOrdered::new(workers, options.memory_limit, "fbz-deflate")?,
-            buffer: Vec::with_capacity(segment_size + WINDOW_SIZE),
-            prefix_len: 0,
-            segment_size,
-            reservation,
-            crc: Hasher::new(),
-            input_len: 0,
-            output_len: 0,
-        })
+        Ok(Self { output: Some(output), options, pipeline: StreamingOrdered::new(workers, options.memory_limit, "fbz-deflate")?,
+            buffer: Vec::with_capacity(segment_size + WINDOW_SIZE), prefix_len: 0, segment_size, reservation, crc: Hasher::new(), input_len: 0, output_len: 0 })
     }
 
     fn commit_next(&mut self) -> Result<()> {

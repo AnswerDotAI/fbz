@@ -2,12 +2,7 @@
 #[path = "common/benchmark.rs"]
 mod benchmark;
 
-use std::{
-    ffi::{c_char, c_uint},
-    fs,
-    path::{Path, PathBuf},
-    ptr,
-};
+use std::{ffi::{c_char, c_uint}, fs, path::{Path, PathBuf}, ptr};
 
 use crabz2::{Level, compress};
 use fbz::{DecodeOptions, decompress};
@@ -38,20 +33,9 @@ fn oracle_decompress(input: &[u8]) -> Result<Vec<u8>, i32> {
     while input_offset < input.len() {
         let remaining = &input[input_offset..];
         let input_len = c_uint::try_from(remaining.len()).unwrap();
-        let mut stream = bz_stream {
-            next_in: remaining.as_ptr().cast::<c_char>(),
-            avail_in: input_len,
-            total_in_lo32: 0,
-            total_in_hi32: 0,
-            next_out: ptr::null_mut(),
-            avail_out: 0,
-            total_out_lo32: 0,
-            total_out_hi32: 0,
-            state: ptr::null_mut(),
-            bzalloc: None,
-            bzfree: None,
-            opaque: ptr::null_mut(),
-        };
+        let mut stream = bz_stream { next_in: remaining.as_ptr().cast::<c_char>(), avail_in: input_len, total_in_lo32: 0, total_in_hi32: 0,
+            next_out: ptr::null_mut(), avail_out: 0, total_out_lo32: 0, total_out_hi32: 0, state: ptr::null_mut(), bzalloc: None, bzfree: None,
+            opaque: ptr::null_mut() };
         let init = unsafe { BZ2_bzDecompressInit(&mut stream, 0, 0) };
         if init != BZ_OK { return Err(init); }
 

@@ -40,7 +40,9 @@ impl DecodeOptions {
 #[derive(Clone, Debug)]
 enum Marker { Block(BlockCandidate), End(EndCandidate) }
 
-impl Marker { fn bit_offset(&self) -> u64 { match self { Self::Block(block) => block.bit_offset, Self::End(end) => end.bit_offset } } }
+impl Marker {
+    fn bit_offset(&self) -> u64 { match self { Self::Block(block) => block.bit_offset, Self::End(end) => end.bit_offset } }
+}
 
 pub fn decompress(data: &[u8], options: DecodeOptions) -> Result<Vec<u8>> {
     let mut output = Vec::new();
@@ -62,11 +64,7 @@ pub fn decompress_to_writer_with_progress(data: &[u8], output: &mut impl Write, 
 /// Decode into an output that can take ownership of completed chunks.
 #[doc(hidden)]
 pub fn decompress_to_sink_with_progress(
-    data: &[u8],
-    output: &mut impl OutputSink,
-    options: DecodeOptions,
-    mut progress: impl FnMut(DecodeProgress),
-) -> Result<()> {
+    data: &[u8], output: &mut impl OutputSink, options: DecodeOptions, mut progress: impl FnMut(DecodeProgress)) -> Result<()> {
     let options = options.validate()?;
     if options.resolved_threads() == 1 {
         return decoder::decode_serial_with_progress(data, output, &mut |compressed_bytes, decoded_bytes| {
@@ -109,11 +107,7 @@ fn decode_to_sink_impl(data: &[u8], output: &mut impl OutputSink, options: Decod
 struct PrefetchedCandidate { bit_offset: u64, expected_crc: u32, decoded: decoder::DecodedCandidate }
 
 fn decode_to_sink_impl_with_prefetched(
-    data: &[u8],
-    output: &mut impl OutputSink,
-    options: DecodeOptions,
-    progress: &mut impl FnMut(DecodeProgress),
-    prefetched: Option<PrefetchedCandidate>,
+    data: &[u8], output: &mut impl OutputSink, options: DecodeOptions, progress: &mut impl FnMut(DecodeProgress), prefetched: Option<PrefetchedCandidate>
 ) -> Result<Index> {
     let options = options.validate()?;
     let threads = options.resolved_threads();
@@ -126,51 +120,33 @@ fn decode_to_sink_impl_with_prefetched(
 
     if markers.len() > data.len() / 16 + 64 { return Err(Error::InvalidConfiguration("input contains too many speculative markers".into())); }
 
-    let prefetched = prefetched
-        .map(|prefetched| {
-            let marker_index = marker_at(&markers, prefetched.bit_offset)?;
-            let Marker::Block(block) = &markers[marker_index] else { return Err(required_marker(prefetched.bit_offset)) };
-            if block.expected_crc != prefetched.expected_crc {
-                return Err(Error::Decode { bit_offset: prefetched.bit_offset, source: DecodeError::InvalidBlock });
-            }
-            Ok((marker_index, prefetched.decoded))
-        })
-        .transpose()?;
+    let prefetched = prefetched.map(|prefetched| {
+        let marker_index = marker_at(&markers, prefetched.bit_offset)?;
+        let Marker::Block(block) = &markers[marker_index] else { return Err(required_marker(prefetched.bit_offset)) };
+        if block.expected_crc != prefetched.expected_crc { return Err(Error::Decode { bit_offset: prefetched.bit_offset, source: DecodeError::InvalidBlock }); }
+        Ok((marker_index, prefetched.decoded))
+    }).transpose()?;
 
     let Some(pool) = pool else {
         debug_assert!(prefetched.is_none());
         let mut candidates = SerialCandidates { data, markers: &markers };
         return assemble(data, output, &markers, &mut candidates, progress);
     };
-    let jobs: Vec<_> = markers
-        .iter()
-        .enumerate()
-        .filter_map(|(marker_index, marker)| match marker {
-            Marker::Block(_) if prefetched.as_ref().is_some_and(|(prefetched_index, _)| *prefetched_index == marker_index) => None,
-            Marker::Block(block) => Some(Job {
-                key: marker_index,
-                reservation: MAX_DECODED_BLOCK,
-                payload: CandidateJob { start_bit: block.bit_offset, expected_crc: block.expected_crc },
-            }),
-            Marker::End(_) => None,
-        })
-        .collect();
+    let jobs: Vec<_> = markers.iter().enumerate().filter_map(|(marker_index, marker)| match marker {
+        Marker::Block(_) if prefetched.as_ref().is_some_and(|(prefetched_index, _)| *prefetched_index == marker_index) => None,
+        Marker::Block(block) => Some(Job { key: marker_index, reservation: MAX_DECODED_BLOCK,
+            payload: CandidateJob { start_bit: block.bit_offset, expected_crc: block.expected_crc } }), Marker::End(_) => None
+    }).collect();
     run_ordered(
-        &pool,
-        &jobs,
-        PipelineLimits { memory: options.memory_limit, active: usize::MAX },
-        |job| decoder::decode_candidate(data, job.start_bit, job.expected_crc),
-        candidate_len,
-        |results| { let mut candidates = ParallelCandidates { results, prefetched }; assemble(data, output, &markers, &mut candidates, progress) },
-    )
+        &pool, &jobs, PipelineLimits { memory: options.memory_limit, active: usize::MAX },
+        |job| decoder::decode_candidate(data, job.start_bit, job.expected_crc), candidate_len, |results| {
+            let mut candidates = ParallelCandidates { results, prefetched };
+            assemble(data, output, &markers, &mut candidates, progress)
+        })
 }
 
 fn assemble(
-    data: &[u8],
-    output: &mut impl OutputSink,
-    markers: &[Marker],
-    candidates: &mut impl Candidates,
-    progress: &mut impl FnMut(DecodeProgress),
+    data: &[u8], output: &mut impl OutputSink, markers: &[Marker], candidates: &mut impl Candidates, progress: &mut impl FnMut(DecodeProgress)
 ) -> Result<Index> {
     let mut blocks = Vec::new();
     let mut streams = Vec::new();
@@ -191,16 +167,9 @@ fn assemble(
                     if end.expected_stream_crc != combined_crc { return Err(Error::Decode { bit_offset: end.bit_offset, source: DecodeError::CrcMismatch }); }
                     let after_eos = end.bit_offset.checked_add(80).ok_or_else(offset_overflow)?;
                     header_byte = after_eos.checked_add(7).ok_or_else(offset_overflow)? / 8;
-                    streams.push(StreamIndex {
-                        compressed_header_byte: current_stream_header(current_bit, first_block, &blocks, header_byte),
-                        block_size_100k: level,
-                        first_block,
-                        block_count: blocks.len() as u64 - first_block,
-                        decoded_start: stream_decoded_start,
-                        decoded_len: decoded_offset - stream_decoded_start,
-                        eos_bit: end.bit_offset,
-                        expected_stream_crc: end.expected_stream_crc,
-                    });
+                    streams.push(StreamIndex { compressed_header_byte: current_stream_header(current_bit, first_block, &blocks, header_byte),
+                        block_size_100k: level, first_block, block_count: blocks.len() as u64 - first_block, decoded_start: stream_decoded_start,
+                        decoded_len: decoded_offset - stream_decoded_start, eos_bit: end.bit_offset, expected_stream_crc: end.expected_stream_crc });
                     break;
                 }
                 Marker::Block(block) => {
@@ -212,14 +181,8 @@ fn assemble(
                     candidates.discard_before(end_index);
                     let decoded_len = decoded.decoded_len as u64;
                     output.write_owned_from(decoded.output, 0)?;
-                    blocks.push(BlockIndex {
-                        compressed_start_bit: block.bit_offset,
-                        compressed_end_bit: markers[end_index].bit_offset(),
-                        decoded_start: decoded_offset,
-                        decoded_len,
-                        expected_crc: block.expected_crc,
-                        stream: stream_number,
-                    });
+                    blocks.push(BlockIndex { compressed_start_bit: block.bit_offset, compressed_end_bit: markers[end_index].bit_offset(),
+                        decoded_start: decoded_offset, decoded_len, expected_crc: block.expected_crc, stream: stream_number });
                     decoded_offset = decoded_offset.checked_add(decoded_len).ok_or_else(offset_overflow)?;
                     progress(DecodeProgress { compressed_bytes: decoded.end_bit.div_ceil(8), decoded_bytes: decoded_offset });
                     combined_crc = combine_stream_crc(combined_crc, block.expected_crc);
@@ -259,8 +222,7 @@ struct CandidateJob { start_bit: u64, expected_crc: u32 }
 fn candidate_len(result: &Result<decoder::DecodedCandidate>) -> usize { result.as_ref().map_or(0, |decoded| decoded.output.len()) }
 
 struct ParallelCandidates<'results, 'pipeline> {
-    results: &'results mut OrderedResults<'pipeline, Result<decoder::DecodedCandidate>>,
-    prefetched: Option<(usize, decoder::DecodedCandidate)>,
+    results: &'results mut OrderedResults<'pipeline, Result<decoder::DecodedCandidate>>, prefetched: Option<(usize, decoder::DecodedCandidate)>
 }
 
 impl Candidates for ParallelCandidates<'_, '_> {
@@ -277,12 +239,7 @@ impl Candidates for ParallelCandidates<'_, '_> {
 
 pub(crate) fn thread_pool(threads: usize) -> Result<Option<Arc<ThreadPool>>> {
     if threads <= 1 { return Ok(None); }
-    ThreadPoolBuilder::new()
-        .num_threads(threads)
-        .thread_name(|number| format!("fbz-{number}"))
-        .build()
-        .map(Arc::new)
-        .map(Some)
+    ThreadPoolBuilder::new().num_threads(threads).thread_name(|number| format!("fbz-{number}")).build().map(Arc::new).map(Some)
         .map_err(|error| Error::InvalidConfiguration(error.to_string()))
 }
 

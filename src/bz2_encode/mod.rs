@@ -24,12 +24,7 @@ pub struct EncodeReport { pub input_len: u64, pub output_len: u64, pub blocks: u
 
 struct BlockJob { rle: Vec<u8>, crc: u32, input_len: usize }
 
-struct EncodedBlock {
-    bytes: Vec<u8>,
-    bit_len: usize,
-    crc: u32,
-    input_len: usize,
-}
+struct EncodedBlock { bytes: Vec<u8>, bit_len: usize, crc: u32, input_len: usize }
 
 fn write_symbol_map(output: &mut BitWriter, in_use: &[u8]) {
     let mut used = [false; 256];
@@ -73,19 +68,8 @@ fn encode_block(job: BlockJob) -> EncodedBlock {
 fn reservation(block_limit: usize) -> usize { block_limit.saturating_mul(32) }
 
 pub struct Encoder<W: Write> {
-    output: Option<W>,
-    bits: BitWriter,
-    pipeline: StreamingOrdered<EncodedBlock>,
-    block_limit: usize,
-    reservation: usize,
-    block: Vec<u8>,
-    block_crc: Bz2Crc,
-    block_input_len: usize,
-    runs: rle1::Splitter,
-    combined_crc: u32,
-    input_len: u64,
-    output_len: u64,
-    blocks: u64,
+    output: Option<W>, bits: BitWriter, pipeline: StreamingOrdered<EncodedBlock>, block_limit: usize, reservation: usize, block: Vec<u8>, block_crc: Bz2Crc,
+    block_input_len: usize, runs: rle1::Splitter, combined_crc: u32, input_len: u64, output_len: u64, blocks: u64
 }
 
 impl<W: Write> Encoder<W> {
@@ -102,21 +86,10 @@ impl<W: Write> Encoder<W> {
         let requested = options.resolved_threads();
         let requested = if options.threads == 0 { requested.min(AUTO_WORKERS) } else { requested };
         let workers = requested.min((options.memory_limit / reservation).max(1));
-        let mut encoder = Self {
-            output: Some(output),
-            bits: BitWriter::new(),
-            pipeline: StreamingOrdered::new(workers, options.memory_limit, "fbz-bzip2-encode")?,
-            block_limit,
-            reservation,
-            block: Vec::with_capacity(block_limit),
-            block_crc: Bz2Crc::new(),
-            block_input_len: 0,
-            runs: rle1::Splitter::new(),
-            combined_crc: 0,
-            input_len: 0,
-            output_len: 0,
-            blocks: 0,
-        };
+        let mut encoder = Self { output: Some(output), bits: BitWriter::new(),
+            pipeline: StreamingOrdered::new(workers, options.memory_limit, "fbz-bzip2-encode")?, block_limit, reservation,
+            block: Vec::with_capacity(block_limit), block_crc: Bz2Crc::new(), block_input_len: 0, runs: rle1::Splitter::new(), combined_crc: 0, input_len: 0,
+            output_len: 0, blocks: 0 };
         for byte in [b'B', b'Z', b'h', b'0' + level] { encoder.bits.write_u8(byte); }
         encoder.drain_bits()?;
         Ok(encoder)

@@ -1,18 +1,10 @@
 //! ZIP archive creation using fbz's raw-DEFLATE encoder.
 
-use std::{
-    fs,
-    io::{self, Write},
-    path::{Path, PathBuf},
-    time::UNIX_EPOCH,
-};
+use std::{fs, io::{self, Write}, path::{Path, PathBuf}, time::UNIX_EPOCH};
 
 use rayon::ThreadPoolBuilder;
 
-use crate::{
-    EncodeOptions, Error, Result, deflate,
-    pipeline::{Job, PipelineLimits, run_ordered},
-};
+use crate::{EncodeOptions, Error, Result, deflate, pipeline::{Job, PipelineLimits, run_ordered}};
 
 const UTF8_DATA_DESCRIPTOR: u16 = 0x0808;
 const METHOD_STORED: u16 = 0;
@@ -29,26 +21,11 @@ pub struct PathInput { pub source: PathBuf, pub archive_path: PathBuf }
 enum Kind { File, Directory, Symlink }
 
 #[derive(Clone, Debug)]
-struct Entry {
-    source: PathBuf,
-    name: String,
-    kind: Kind,
-    size: u64,
-    mode: u32,
-    modified: Option<u32>,
-}
+struct Entry { source: PathBuf, name: String, kind: Kind, size: u64, mode: u32, modified: Option<u32> }
 
 #[derive(Clone, Debug)]
 struct CentralEntry {
-    name: String,
-    method: u16,
-    crc: u32,
-    compressed_size: u64,
-    uncompressed_size: u64,
-    local_offset: u64,
-    mode: u32,
-    modified: Option<u32>,
-    zip64: bool,
+    name: String, method: u16, crc: u32, compressed_size: u64, uncompressed_size: u64, local_offset: u64, mode: u32, modified: Option<u32>, zip64: bool
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -59,7 +36,11 @@ fn invalid(message: impl Into<String>) -> Error { Error::InvalidZip(message.into
 #[cfg(unix)]
 fn mode(metadata: &fs::Metadata) -> u32 {
     use std::os::unix::fs::{FileTypeExt, PermissionsExt};
-    let kind = if metadata.file_type().is_symlink() { 0o120000 } else if metadata.is_dir() { 0o040000 } else if metadata.file_type().is_file() { 0o100000 } else if metadata.file_type().is_fifo() { 0o010000 } else { 0 };
+    let kind = if metadata.file_type().is_symlink() { 0o120000 }
+    else if metadata.is_dir() { 0o040000 }
+    else if metadata.file_type().is_file() { 0o100000 }
+    else if metadata.file_type().is_fifo() { 0o010000 }
+    else { 0 };
     kind | metadata.permissions().mode()
 }
 
@@ -79,8 +60,7 @@ fn zip_name(path: &Path, directory: bool) -> Result<String> {
     for component in path.components() {
         match component {
             std::path::Component::Normal(part) => parts.push(part.to_str().ok_or_else(|| invalid(format!("ZIP path {} is not UTF-8", path.display())))?),
-            std::path::Component::CurDir => {}
-            _ => return Err(invalid(format!("unsafe ZIP path {}", path.display()))),
+            std::path::Component::CurDir => {} _ => return Err(invalid(format!("unsafe ZIP path {}", path.display())))
         }
     }
     if parts.is_empty() { return Err(invalid("empty ZIP path")); }
@@ -92,16 +72,13 @@ fn zip_name(path: &Path, directory: bool) -> Result<String> {
 fn entry(input: &PathInput) -> Result<Entry> {
     let PathInput { source, archive_path } = input;
     let metadata = fs::symlink_metadata(source)?;
-    let kind = if metadata.file_type().is_symlink() { Kind::Symlink } else if metadata.is_dir() { Kind::Directory } else if metadata.is_file() { Kind::File } else { return Err(invalid(format!("unsupported filesystem entry {}", source.display()))); };
+    let kind = if metadata.file_type().is_symlink() { Kind::Symlink }
+    else if metadata.is_dir() { Kind::Directory }
+    else if metadata.is_file() { Kind::File }
+    else { return Err(invalid(format!("unsupported filesystem entry {}", source.display()))); };
     let size = match kind { Kind::File => metadata.len(), Kind::Symlink => symlink_bytes(source)?.len() as u64, Kind::Directory => 0 };
-    Ok(Entry {
-        source: source.to_path_buf(),
-        name: zip_name(archive_path, kind == Kind::Directory)?,
-        kind,
-        size,
-        mode: mode(&metadata),
-        modified: modified(&metadata),
-    })
+    Ok(Entry { source: source.to_path_buf(), name: zip_name(archive_path, kind == Kind::Directory)?, kind, size, mode: mode(&metadata),
+        modified: modified(&metadata) })
 }
 
 struct CountingWriter<W> { inner: W, position: u64 }
@@ -164,8 +141,7 @@ fn write_descriptor(output: &mut impl Write, crc: u32, compressed: u64, uncompre
     if zip64 {
         push_u64(output, compressed)?;
         push_u64(output, uncompressed)?;
-    }
-    else {
+    } else {
         push_u32(output, compressed.try_into().map_err(|_| invalid("compressed ZIP entry unexpectedly requires Zip64"))?)?;
         push_u32(output, uncompressed.try_into().map_err(|_| invalid("ZIP entry unexpectedly requires Zip64"))?)?;
     }
@@ -213,19 +189,11 @@ fn write_central(output: &mut impl Write, entry: &CentralEntry) -> Result<()> {
 
 fn stored_bytes(entry: &Entry) -> Result<Vec<u8>> {
     match entry.kind {
-        Kind::Directory => Ok(Vec::new()),
-        Kind::Symlink => symlink_bytes(&entry.source),
-        Kind::File => fs::read(&entry.source).map_err(Error::from),
+        Kind::Directory => Ok(Vec::new()), Kind::Symlink => symlink_bytes(&entry.source), Kind::File => fs::read(&entry.source).map_err(Error::from)
     }
 }
 
-struct Prepared {
-    entry: Entry,
-    bytes: Vec<u8>,
-    method: u16,
-    crc: u32,
-    uncompressed_size: u64,
-}
+struct Prepared { entry: Entry, bytes: Vec<u8>, method: u16, crc: u32, uncompressed_size: u64 }
 
 fn prepare(entry: Entry, level: u8) -> Result<Prepared> {
     let plain = stored_bytes(&entry)?;
@@ -237,7 +205,10 @@ fn prepare(entry: Entry, level: u8) -> Result<Prepared> {
     let (encoded, report) = deflate::compress_bytes_serial(&plain, level)?;
     if encoded.len() < plain.len() {
         Ok(Prepared { entry, bytes: encoded, method: METHOD_DEFLATE, crc: report.crc, uncompressed_size: report.input_len })
-    } else { let uncompressed_size = plain.len() as u64; Ok(Prepared { entry, bytes: plain, method: METHOD_STORED, crc, uncompressed_size }) }
+    } else {
+        let uncompressed_size = plain.len() as u64;
+        Ok(Prepared { entry, bytes: plain, method: METHOD_STORED, crc, uncompressed_size })
+    }
 }
 
 fn write_prepared<W: Write>(output: &mut CountingWriter<W>, prepared: Prepared, central: &mut Vec<CentralEntry>) -> Result<()> {
@@ -246,17 +217,8 @@ fn write_prepared<W: Write>(output: &mut CountingWriter<W>, prepared: Prepared, 
     write_local_header(output, &prepared.entry, prepared.method, zip64)?;
     output.write_all(&prepared.bytes)?;
     write_descriptor(output, prepared.crc, prepared.bytes.len() as u64, prepared.uncompressed_size, zip64)?;
-    central.push(CentralEntry {
-        name: prepared.entry.name,
-        method: prepared.method,
-        crc: prepared.crc,
-        compressed_size: prepared.bytes.len() as u64,
-        uncompressed_size: prepared.uncompressed_size,
-        local_offset,
-        mode: prepared.entry.mode,
-        modified: prepared.entry.modified,
-        zip64,
-    });
+    central.push(CentralEntry { name: prepared.entry.name, method: prepared.method, crc: prepared.crc, compressed_size: prepared.bytes.len() as u64,
+        uncompressed_size: prepared.uncompressed_size, local_offset, mode: prepared.entry.mode, modified: prepared.entry.modified, zip64 });
     Ok(())
 }
 
@@ -269,17 +231,8 @@ fn write_large<W: Write>(output: &mut CountingWriter<W>, entry: Entry, options: 
     let report = deflate::compress_to_writer(&mut source, output, options)?;
     let compressed_size = output.position - compressed_start;
     write_descriptor(output, report.crc, compressed_size, report.input_len, zip64)?;
-    central.push(CentralEntry {
-        name: entry.name,
-        method: METHOD_DEFLATE,
-        crc: report.crc,
-        compressed_size,
-        uncompressed_size: report.input_len,
-        local_offset,
-        mode: entry.mode,
-        modified: entry.modified,
-        zip64,
-    });
+    central.push(CentralEntry { name: entry.name, method: METHOD_DEFLATE, crc: report.crc, compressed_size, uncompressed_size: report.input_len, local_offset,
+        mode: entry.mode, modified: entry.modified, zip64 });
     Ok(())
 }
 
@@ -340,22 +293,16 @@ pub fn create_to_writer<W: Write + ?Sized>(inputs: &[PathInput], output: &mut W,
     for entry in large { write_large(&mut output, entry, options, &mut central)?; }
     if options.resolved_threads() == 1 || small.len() <= 1 {
         for entry in small { write_prepared(&mut output, prepare(entry, options.level_or(6))?, &mut central)?; }
-    }
-    else {
-        let pool = ThreadPoolBuilder::new()
-            .num_threads(options.resolved_threads())
-            .thread_name(|index| format!("fbz-zip-encode-{index}"))
-            .build()
+    } else {
+        let pool = ThreadPoolBuilder::new().num_threads(options.resolved_threads()).thread_name(|index| format!("fbz-zip-encode-{index}")).build()
             .map_err(|error| invalid(error.to_string()))?;
         let jobs: Vec<_> = small.into_iter().enumerate().map(|(key, entry)| Job { key, reservation: small_reservation(&entry), payload: entry }).collect();
         run_ordered(
-            &pool,
-            &jobs,
-            PipelineLimits { memory: options.memory_limit, active: options.resolved_threads() },
-            |entry| prepare(entry.clone(), options.level_or(6)),
-            |result| result.as_ref().map_or(0, |prepared| prepared.bytes.capacity()),
-            |results| { for key in 0..jobs.len() { write_prepared(&mut output, results.take(key)??, &mut central)?; } Ok(()) },
-        )?;
+            &pool, &jobs, PipelineLimits { memory: options.memory_limit, active: options.resolved_threads() },
+            |entry| prepare(entry.clone(), options.level_or(6)), |result| result.as_ref().map_or(0, |prepared| prepared.bytes.capacity()), |results| {
+                for key in 0..jobs.len() { write_prepared(&mut output, results.take(key)??, &mut central)?; }
+                Ok(())
+            })?;
     }
     finish_archive(&mut output, &central)?;
     Ok(EncodeReport { entries: central.len(), input_len, output_len: output.position })

@@ -3,11 +3,8 @@
 use std::{io::Write, sync::OnceLock};
 
 use crate::{
-    DecodeOptions, DecodeProgress, EncodeOptions, Error, OutputSink, Result, WriterSink,
-    deflate::{DISTANCE_BASE, DISTANCE_EXTRA, LENGTH_BASE, LENGTH_EXTRA},
-    deflate_encode,
-    history::extend_match,
-    pipeline::{Job, PipelineLimits, run_staged_ordered},
+    DecodeOptions, DecodeProgress, EncodeOptions, Error, OutputSink, Result, WriterSink, deflate::{DISTANCE_BASE, DISTANCE_EXTRA, LENGTH_BASE, LENGTH_EXTRA},
+    deflate_encode, history::extend_match, pipeline::{Job, PipelineLimits, run_staged_ordered}
 };
 
 const WINDOW_SIZE: usize = 32 * 1024;
@@ -28,49 +25,25 @@ impl BlockKind {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Member {
-    pub compressed_start: u64,
-    pub deflate_start: u64,
-    pub compressed_end: u64,
-    pub decoded_start: u64,
-    pub decoded_len: u64,
-    pub expected_crc: u32,
-    pub mtime: u32,
-    pub extra_flags: u8,
-    pub operating_system: u8,
-    pub name: Option<Vec<u8>>,
-    pub comment: Option<Vec<u8>>,
+    pub compressed_start: u64, pub deflate_start: u64, pub compressed_end: u64, pub decoded_start: u64, pub decoded_len: u64, pub expected_crc: u32,
+    pub mtime: u32, pub extra_flags: u8, pub operating_system: u8, pub name: Option<Vec<u8>>, pub comment: Option<Vec<u8>>
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Block {
-    pub member: u32,
-    pub kind: BlockKind,
-    pub final_block: bool,
-    pub compressed_start_bit: u64,
-    pub compressed_end_bit: u64,
-    pub decoded_start: u64,
-    pub decoded_len: u64,
+    pub member: u32, pub kind: BlockKind, pub final_block: bool, pub compressed_start_bit: u64, pub compressed_end_bit: u64, pub decoded_start: u64,
+    pub decoded_len: u64
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Report {
-    pub source_len: u64,
-    pub decoded_len: u64,
-    pub members: Vec<Member>,
-    pub blocks: Vec<Block>,
-    pub speculative_chunks: u64,
-    pub fallback_chunks: u64,
+    pub source_len: u64, pub decoded_len: u64, pub members: Vec<Member>, pub blocks: Vec<Block>, pub speculative_chunks: u64, pub fallback_chunks: u64
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeflateReport {
-    pub source_len: u64,
-    pub compressed_end_bit: u64,
-    pub decoded_len: u64,
-    pub crc: u32,
-    pub blocks: Vec<Block>,
-    pub speculative_chunks: u64,
-    pub fallback_chunks: u64,
+    pub source_len: u64, pub compressed_end_bit: u64, pub decoded_len: u64, pub crc: u32, pub blocks: Vec<Block>, pub speculative_chunks: u64,
+    pub fallback_chunks: u64
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -117,14 +90,7 @@ pub fn compress_to_writer(input: &mut impl std::io::Read, output: &mut impl Writ
 }
 
 #[derive(Clone, Debug)]
-struct Header {
-    deflate_start: usize,
-    mtime: u32,
-    extra_flags: u8,
-    operating_system: u8,
-    name: Option<Vec<u8>>,
-    comment: Option<Vec<u8>>,
-}
+struct Header { deflate_start: usize, mtime: u32, extra_flags: u8, operating_system: u8, name: Option<Vec<u8>>, comment: Option<Vec<u8>> }
 
 pub fn decompress(data: &[u8]) -> Result<Vec<u8>> { decompress_with_options(data, DecodeOptions::default()) }
 
@@ -147,20 +113,15 @@ pub fn decompress_to_writer_with_progress(data: &[u8], output: &mut impl Write, 
 }
 
 pub fn decompress_to_writer_with_options_and_progress(
-    data: &[u8],
-    output: &mut impl Write,
-    options: DecodeOptions,
-    progress: impl FnMut(DecodeProgress),
-) -> Result<Report> { let mut output = WriterSink::new(output); decompress_to_sink_with_options_and_progress(data, &mut output, options, progress) }
+    data: &[u8], output: &mut impl Write, options: DecodeOptions, progress: impl FnMut(DecodeProgress)) -> Result<Report> {
+    let mut output = WriterSink::new(output);
+    decompress_to_sink_with_options_and_progress(data, &mut output, options, progress)
+}
 
 /// Decode into an output that can take ownership of completed chunks.
 #[doc(hidden)]
 pub fn decompress_to_sink_with_options_and_progress(
-    data: &[u8],
-    output: &mut impl OutputSink,
-    options: DecodeOptions,
-    mut progress: impl FnMut(DecodeProgress),
-) -> Result<Report> {
+    data: &[u8], output: &mut impl OutputSink, options: DecodeOptions, mut progress: impl FnMut(DecodeProgress)) -> Result<Report> {
     let options = options.validate()?;
     let mut members = Vec::new();
     let mut blocks = Vec::new();
@@ -181,7 +142,9 @@ pub fn decompress_to_sink_with_options_and_progress(
         let trailer_bytes = data.get(trailer..trailer_end).ok_or_else(|| invalid_at(trailer, "truncated member trailer"))?;
         let expected_crc = u32::from_le_bytes(trailer_bytes[..4].try_into().unwrap());
         let expected_size = u32::from_le_bytes(trailer_bytes[4..].try_into().unwrap());
-        if decoded.crc != expected_crc { return Err(invalid_at(trailer, format!("CRC32 mismatch: expected {expected_crc:08x}, decoded {:08x}", decoded.crc))); }
+        if decoded.crc != expected_crc {
+            return Err(invalid_at(trailer, format!("CRC32 mismatch: expected {expected_crc:08x}, decoded {:08x}", decoded.crc)));
+        }
         if decoded.decoded_len as u32 != expected_size {
             return Err(invalid_at(trailer + 4, format!("ISIZE mismatch: expected {expected_size}, decoded {}", decoded.decoded_len as u32)));
         }
@@ -190,42 +153,22 @@ pub fn decompress_to_sink_with_options_and_progress(
         fallback_total += decoded.fallback_chunks;
         blocks.extend(decoded.blocks);
         position = trailer_end;
-        members.push(Member {
-            compressed_start: member_start as u64,
-            deflate_start: header.deflate_start as u64,
-            compressed_end: position as u64,
-            decoded_start: decoded_total - decoded.decoded_len,
-            decoded_len: decoded.decoded_len,
-            expected_crc,
-            mtime: header.mtime,
-            extra_flags: header.extra_flags,
-            operating_system: header.operating_system,
-            name: header.name,
-            comment: header.comment,
-        });
+        members.push(Member { compressed_start: member_start as u64, deflate_start: header.deflate_start as u64, compressed_end: position as u64,
+            decoded_start: decoded_total - decoded.decoded_len, decoded_len: decoded.decoded_len, expected_crc, mtime: header.mtime,
+            extra_flags: header.extra_flags, operating_system: header.operating_system, name: header.name, comment: header.comment });
         progress(DecodeProgress { compressed_bytes: position as u64, decoded_bytes: decoded_total });
     }
     if members.is_empty() { return Err(invalid("input contains no gzip members")); }
     output.flush()?;
     progress(DecodeProgress { compressed_bytes: data.len() as u64, decoded_bytes: decoded_total });
-    Ok(Report {
-        source_len: data.len() as u64,
-        decoded_len: decoded_total,
-        members,
-        blocks,
-        speculative_chunks: speculative_total,
-        fallback_chunks: fallback_total,
-    })
+    Ok(Report { source_len: data.len() as u64, decoded_len: decoded_total, members, blocks, speculative_chunks: speculative_total,
+        fallback_chunks: fallback_total })
 }
 
 /// Decode one raw DEFLATE stream into an output that can take ownership of completed chunks.
 #[doc(hidden)]
 pub(crate) fn decompress_deflate_to_sink_with_options_and_progress(
-    data: &[u8],
-    output: &mut impl OutputSink,
-    options: DecodeOptions,
-    mut progress: impl FnMut(DecodeProgress),
-) -> Result<DeflateReport> {
+    data: &[u8], output: &mut impl OutputSink, options: DecodeOptions, mut progress: impl FnMut(DecodeProgress)) -> Result<DeflateReport> {
     let options = options.validate()?;
     let stream = DeflateStream { start_byte: 0, end_byte: data.len(), member: 0, decoded_base: 0 };
     let report = decompress_deflate_stream(data, stream, output, options, &mut progress)?;
@@ -240,14 +183,7 @@ pub(crate) fn decompress_deflate_to_sink_with_options_and_progress(
 #[derive(Clone, Copy)]
 enum InitialHistory { Empty, Unknown }
 
-struct MarkerOutput {
-    marked: Vec<u16>,
-    clean: Vec<u8>,
-    clean_start: usize,
-    history: InitialHistory,
-    limit: usize,
-    clean_mode: bool,
-}
+struct MarkerOutput { marked: Vec<u16>, clean: Vec<u8>, clean_start: usize, history: InitialHistory, limit: usize, clean_mode: bool }
 
 impl MarkerOutput {
     fn new(history: InitialHistory, limit: usize) -> Self {
@@ -315,14 +251,7 @@ impl DeflateOutput for MarkerOutput {
 }
 
 struct Segment {
-    start_bit: usize,
-    end_bit: usize,
-    marked: Vec<u16>,
-    clean: Vec<u8>,
-    clean_start: usize,
-    clean_crc: crc32fast::Hasher,
-    blocks: Vec<Block>,
-    final_block: bool,
+    start_bit: usize, end_bit: usize, marked: Vec<u16>, clean: Vec<u8>, clean_start: usize, clean_crc: crc32fast::Hasher, blocks: Vec<Block>, final_block: bool
 }
 
 impl Segment {
@@ -338,33 +267,17 @@ fn decode_segment(data: &[u8], start_bit: usize, stop_bit: usize, history: Initi
     let final_block = loop {
         let final_block = decode_block(&mut bits, &mut emitter, 0, &mut blocks, &mut |_| {})?;
         emitter.try_clean();
-        if final_block {
-            bits.align_byte();
-            break true;
-        }
+        if final_block { bits.align_byte(); break true; }
         if bits.position_bits() >= stop_bit && blocks.last().is_some_and(|block| block.kind == BlockKind::DynamicHuffman) { break false; }
     };
     let mut clean_crc = crc32fast::Hasher::new();
     clean_crc.update(&emitter.clean[emitter.clean_start..]);
-    Ok(Segment {
-        start_bit,
-        end_bit: bits.position_bits(),
-        marked: emitter.marked,
-        clean: emitter.clean,
-        clean_start: emitter.clean_start,
-        clean_crc,
-        blocks,
-        final_block,
-    })
+    Ok(Segment { start_bit, end_bit: bits.position_bits(), marked: emitter.marked, clean: emitter.clean, clean_start: emitter.clean_start, clean_crc, blocks,
+        final_block })
 }
 
 #[derive(Clone, Copy)]
-struct GzipJob {
-    search_start: usize,
-    search_end: usize,
-    stop_bit: usize,
-    output_limit: usize,
-}
+struct GzipJob { search_start: usize, search_end: usize, stop_bit: usize, output_limit: usize }
 
 fn run_gzip_job(data: &[u8], job: &GzipJob) -> Result<Segment> {
     let mut search = job.search_start;
@@ -372,8 +285,7 @@ fn run_gzip_job(data: &[u8], job: &GzipJob) -> Result<Segment> {
         let start = find_dynamic_boundary(data, search, job.search_end)
             .ok_or_else(|| invalid_bit(job.search_start, "no decodable dynamic DEFLATE boundary found near the parallel grid point"))?;
         match decode_segment(data, start, job.stop_bit, InitialHistory::Unknown, job.output_limit) {
-            Ok(segment) => return Ok(segment),
-            Err(_) => search = start.saturating_add(1),
+            Ok(segment) => return Ok(segment), Err(_) => search = start.saturating_add(1)
         }
     }
 }
@@ -425,7 +337,8 @@ fn valid_precode_shape(data: &[u8], block_bit: usize) -> bool {
 
 #[inline(always)]
 fn word_at(data: &[u8], byte: usize) -> u64 {
-    if data.len().saturating_sub(byte) >= 8 { u64::from_le_bytes(data[byte..byte + 8].try_into().unwrap()) } else { data[byte..].iter().take(8).enumerate().fold(0_u64, |word, (index, &value)| word | u64::from(value) << (index * 8)) }
+    if data.len().saturating_sub(byte) >= 8 { u64::from_le_bytes(data[byte..byte + 8].try_into().unwrap()) }
+    else { data[byte..].iter().take(8).enumerate().fold(0_u64, |word, (index, &value)| word | u64::from(value) << (index * 8)) }
 }
 
 fn resolve_symbols(symbols: &[u16], predecessor: &[u8]) -> Result<Vec<u8>> {
@@ -437,8 +350,7 @@ fn resolve_symbols(symbols: &[u16], predecessor: &[u8]) -> Result<Vec<u8>> {
         for (target, &symbol) in resolved.spare_capacity_mut().iter_mut().zip(symbols) { target.write(lookup[symbol as usize]); }
         // SAFETY: the loop initialized one distinct spare-capacity byte per input symbol.
         unsafe { resolved.set_len(symbols.len()) };
-    }
-    else {
+    } else {
         let missing = WINDOW_SIZE.saturating_sub(predecessor.len());
         for &symbol in symbols {
             let byte = if symbol <= u8::MAX as u16 { symbol as u8 } else {
@@ -467,14 +379,7 @@ fn successor_window(segment: &Segment, predecessor: &[u8]) -> Result<Vec<u8>> {
 
 struct ResolveTask { segment: Segment, predecessor: Vec<u8> }
 
-struct ResolvedSegment {
-    marked: Vec<u8>,
-    clean: Vec<u8>,
-    clean_start: usize,
-    blocks: Vec<Block>,
-    compressed_end_bit: usize,
-    crc: crc32fast::Hasher,
-}
+struct ResolvedSegment { marked: Vec<u8>, clean: Vec<u8>, clean_start: usize, blocks: Vec<Block>, compressed_end_bit: usize, crc: crc32fast::Hasher }
 
 fn resolve_segment(segment: Segment, predecessor: &[u8]) -> Result<ResolvedSegment> {
     let marked = resolve_symbols(&segment.marked, predecessor)?;
@@ -485,13 +390,7 @@ fn resolve_segment(segment: Segment, predecessor: &[u8]) -> Result<ResolvedSegme
 }
 
 struct SegmentCommitter<'a, W: ?Sized, P: ?Sized> {
-    member: u32,
-    decoded_base: u64,
-    decoded: u64,
-    output: &'a mut W,
-    crc: crc32fast::Hasher,
-    blocks: &'a mut Vec<Block>,
-    progress: &'a mut P,
+    member: u32, decoded_base: u64, decoded: u64, output: &'a mut W, crc: crc32fast::Hasher, blocks: &'a mut Vec<Block>, progress: &'a mut P
 }
 
 impl<'a, W: OutputSink + ?Sized, P: FnMut(DecodeProgress) + ?Sized> SegmentCommitter<'a, W, P> {
@@ -517,19 +416,10 @@ impl<'a, W: OutputSink + ?Sized, P: FnMut(DecodeProgress) + ?Sized> SegmentCommi
 }
 
 #[derive(Clone, Copy)]
-struct DeflateStream {
-    start_byte: usize,
-    end_byte: usize,
-    member: u32,
-    decoded_base: u64,
-}
+struct DeflateStream { start_byte: usize, end_byte: usize, member: u32, decoded_base: u64 }
 
 fn decompress_deflate_stream(
-    data: &[u8],
-    stream: DeflateStream,
-    output: &mut impl OutputSink,
-    mut options: DecodeOptions,
-    progress: &mut impl FnMut(DecodeProgress),
+    data: &[u8], stream: DeflateStream, output: &mut impl OutputSink, mut options: DecodeOptions, progress: &mut impl FnMut(DecodeProgress)
 ) -> Result<DeflateReport> {
     let DeflateStream { start_byte, end_byte, member, decoded_base } = stream;
     let data = data.get(..end_byte).ok_or_else(|| invalid("DEFLATE end exceeds input"))?;
@@ -541,19 +431,13 @@ fn decompress_deflate_stream(
     }
     let first_grid = start_byte.saturating_add(PARALLEL_GRID);
     let initial_segment = match decode_segment(data, start_byte * 8, first_grid.min(end_byte) * 8, InitialHistory::Empty, PARALLEL_OUTPUT_LIMIT) {
-        Ok(segment) => segment,
-        Err(_) => return decompress_deflate_serial_stream(data, start_byte, output, member, decoded_base, progress),
+        Ok(segment) => segment, Err(_) => return decompress_deflate_serial_stream(data, start_byte, output, member, decoded_base, progress)
     };
     decompress_deflate_parallel_stream(data, start_byte, end_byte, output, options, threads, member, decoded_base, progress, initial_segment)
 }
 
 fn decompress_deflate_serial_stream(
-    data: &[u8],
-    start_byte: usize,
-    output: &mut impl OutputSink,
-    member: u32,
-    decoded_base: u64,
-    progress: &mut impl FnMut(DecodeProgress),
+    data: &[u8], start_byte: usize, output: &mut impl OutputSink, member: u32, decoded_base: u64, progress: &mut impl FnMut(DecodeProgress)
 ) -> Result<DeflateReport> {
     let mut blocks = Vec::new();
     let mut emitter = Emitter::new(output, decoded_base);
@@ -566,17 +450,8 @@ fn decompress_deflate_serial_stream(
 
 #[allow(clippy::too_many_arguments)]
 fn decompress_deflate_parallel_stream(
-    data: &[u8],
-    start_byte: usize,
-    end_byte: usize,
-    output: &mut impl OutputSink,
-    options: DecodeOptions,
-    threads: usize,
-    member: u32,
-    decoded_base: u64,
-    progress: &mut impl FnMut(DecodeProgress),
-    initial_segment: Segment,
-) -> Result<DeflateReport> {
+    data: &[u8], start_byte: usize, end_byte: usize, output: &mut impl OutputSink, options: DecodeOptions, threads: usize, member: u32, decoded_base: u64,
+    progress: &mut impl FnMut(DecodeProgress), initial_segment: Segment) -> Result<DeflateReport> {
     let per_job = PARALLEL_JOB_MEMORY;
     let output_limit = PARALLEL_OUTPUT_LIMIT;
     let horizon = threads.saturating_add(2);
@@ -586,29 +461,17 @@ fn decompress_deflate_parallel_stream(
     let mut key = 1;
     let mut grid = first_grid;
     while grid < end_byte {
-        jobs.push(Job {
-            key,
-            reservation: per_job,
-            payload: GzipJob {
-                search_start: grid * 8,
-                search_end: grid.saturating_add(2 * PARALLEL_GRID).min(end_byte) * 8,
-                stop_bit: grid.saturating_add(PARALLEL_GRID).min(end_byte) * 8,
-                output_limit,
-            },
-        });
+        jobs.push(Job { key, reservation: per_job, payload: GzipJob { search_start: grid * 8,
+                search_end: grid.saturating_add(2 * PARALLEL_GRID).min(end_byte) * 8, stop_bit: grid.saturating_add(PARALLEL_GRID).min(end_byte) * 8,
+                output_limit } });
         key += 1;
         grid = grid.saturating_add(PARALLEL_GRID);
     }
 
     let mut blocks = Vec::new();
     let (compressed_end_bit, decoded_len, crc, speculative_chunks, fallback_chunks) = run_staged_ordered(
-        threads,
-        &jobs,
-        PipelineLimits { memory: parallel_budget, active: horizon.saturating_mul(2) },
-        |job| run_gzip_job(data, job),
-        |result| result.as_ref().map_or(0, Segment::retained_bytes),
-        |task: ResolveTask| resolve_segment(task.segment, &task.predecessor),
-        |results| {
+        threads, &jobs, PipelineLimits { memory: parallel_budget, active: horizon.saturating_mul(2) }, |job| run_gzip_job(data, job),
+        |result| result.as_ref().map_or(0, Segment::retained_bytes), |task: ResolveTask| resolve_segment(task.segment, &task.predecessor), |results| {
             let mut predecessor = Vec::new();
             let mut committer = SegmentCommitter::new(member, decoded_base, output, &mut blocks, progress);
             let mut key = 1;
@@ -678,8 +541,7 @@ fn decompress_deflate_parallel_stream(
 
             let SegmentCommitter { decoded, crc, .. } = committer;
             Ok((next_start as u64, decoded, crc.finalize(), speculative_chunks, fallback_chunks))
-        },
-    )?;
+        })?;
     Ok(DeflateReport { source_len: (end_byte - start_byte) as u64, compressed_end_bit, decoded_len, crc, blocks, speculative_chunks, fallback_chunks })
 }
 
@@ -719,28 +581,17 @@ fn read_zero_terminated(data: &[u8], cursor: &mut usize, field: &str) -> Result<
 }
 
 fn decode_deflate(
-    bits: &mut Bits<'_>,
-    emitter: &mut impl DeflateOutput,
-    member: u32,
-    blocks: &mut Vec<Block>,
-    progress: &mut impl FnMut(DecodeProgress),
-) -> Result<()> { loop { if decode_block(bits, emitter, member, blocks, progress)? { return Ok(()); } } }
+    bits: &mut Bits<'_>, emitter: &mut impl DeflateOutput, member: u32, blocks: &mut Vec<Block>, progress: &mut impl FnMut(DecodeProgress)) -> Result<()> {
+    loop { if decode_block(bits, emitter, member, blocks, progress)? { return Ok(()); } }
+}
 
 fn decode_block(
-    bits: &mut Bits<'_>,
-    emitter: &mut impl DeflateOutput,
-    member: u32,
-    blocks: &mut Vec<Block>,
-    progress: &mut impl FnMut(DecodeProgress),
-) -> Result<bool> {
+    bits: &mut Bits<'_>, emitter: &mut impl DeflateOutput, member: u32, blocks: &mut Vec<Block>, progress: &mut impl FnMut(DecodeProgress)) -> Result<bool> {
     let compressed_start_bit = bits.position_bits() as u64;
     let decoded_start = emitter.total_decoded();
     let final_block = bits.read(1)? != 0;
     let kind = match bits.read(2)? {
-        0 => {
-            decode_stored(bits, emitter)?;
-            BlockKind::Stored
-        }
+        0 => { decode_stored(bits, emitter)?; BlockKind::Stored }
         1 => {
             let (literal, distance) = fixed_tables()?;
             decode_huffman_block(bits, emitter, literal, distance)?;
@@ -923,7 +774,9 @@ impl<'a> Bits<'a> {
         }
         let byte = self.bit / 8;
         let shift = self.bit & 7;
-        let word = if self.data.len().saturating_sub(byte) >= 8 { u64::from_le_bytes(self.data[byte..byte + 8].try_into().unwrap()) } else { self.data[byte..].iter().take(8).enumerate().fold(0_u64, |word, (index, &value)| word | u64::from(value) << (index * 8)) };
+        let word = if self.data.len().saturating_sub(byte) >= 8 { u64::from_le_bytes(self.data[byte..byte + 8].try_into().unwrap()) } else {
+            self.data[byte..].iter().take(8).enumerate().fold(0_u64, |word, (index, &value)| word | u64::from(value) << (index * 8))
+        };
         let mask = if count == 0 { 0 } else { (1_u64 << count) - 1 };
         Ok(((word >> shift) & mask) as u32)
     }
@@ -958,25 +811,12 @@ trait DeflateOutput {
     fn copy(&mut self, distance: usize, length: usize) -> Result<()>;
 }
 
-struct Emitter<'a, W> {
-    output: &'a mut W,
-    buffer: Vec<u8>,
-    history_len: usize,
-    crc: crc32fast::Hasher,
-    member_decoded: u64,
-    decoded_base: u64,
-}
+struct Emitter<'a, W> { output: &'a mut W, buffer: Vec<u8>, history_len: usize, crc: crc32fast::Hasher, member_decoded: u64, decoded_base: u64 }
 
 impl<'a, W: OutputSink> Emitter<'a, W> {
     fn new(output: &'a mut W, decoded_base: u64) -> Self {
-        Self {
-            output,
-            buffer: Vec::with_capacity(WINDOW_SIZE + OUTPUT_CHUNK + 258),
-            history_len: 0,
-            crc: crc32fast::Hasher::new(),
-            member_decoded: 0,
-            decoded_base,
-        }
+        Self { output, buffer: Vec::with_capacity(WINDOW_SIZE + OUTPUT_CHUNK + 258), history_len: 0, crc: crc32fast::Hasher::new(), member_decoded: 0,
+            decoded_base }
     }
 
     fn decoded_position(&self) -> u64 { self.decoded_base + self.member_decoded }
@@ -1043,10 +883,7 @@ fn invalid_bit(bit: usize, message: impl Into<String>) -> Error { invalid(format
 
 #[cfg(test)]
 mod tests {
-    use flate2::{
-        Compression, GzBuilder,
-        write::{DeflateEncoder, GzEncoder},
-    };
+    use flate2::{Compression, GzBuilder, write::{DeflateEncoder, GzEncoder}};
 
     use super::*;
 

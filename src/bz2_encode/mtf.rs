@@ -47,10 +47,7 @@ pub fn encode(block: &[u8]) -> Symbols {
 
     for &b in block {
         let idx = mtf.iter().position(|&m| m == b).expect("byte not in use");
-        if idx == 0 {
-            zeros += 1;
-            continue;
-        }
+        if idx == 0 { zeros += 1; continue; }
         flush_zero_run(&mut syms, &mut zeros);
         mtf.copy_within(0..idx, 1);
         mtf[0] = b;
@@ -128,15 +125,7 @@ mod tests {
     #[test]
     fn run_lengths_one_through_ten_use_the_right_digits() {
         let expected: [&[u16]; 10] = [
-            &[RUNA],
-            &[RUNB],
-            &[RUNA, RUNA],
-            &[RUNB, RUNA],
-            &[RUNA, RUNB],
-            &[RUNB, RUNB],
-            &[RUNA, RUNA, RUNA],
-            &[RUNB, RUNA, RUNA],
-            &[RUNA, RUNB, RUNA],
+            &[RUNA], &[RUNB], &[RUNA, RUNA], &[RUNB, RUNA], &[RUNA, RUNB], &[RUNB, RUNB], &[RUNA, RUNA, RUNA], &[RUNB, RUNA, RUNA], &[RUNA, RUNB, RUNA],
             &[RUNB, RUNB, RUNA],
         ];
         for (i, want) in expected.iter().enumerate() {

@@ -2,11 +2,7 @@
 mod common;
 mod support;
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
-};
+use std::{fs, path::{Path, PathBuf}, process::{Command, Stdio}};
 
 fn input_file(directory: &tempfile::TempDir) -> std::path::PathBuf {
     let path = directory.path().join("simplewiki-prefix.xml");
@@ -38,11 +34,8 @@ fn compare(format: &str, program: &str, arguments: &[&str]) {
     assert!(ours.status.success());
     assert!(theirs.status.success());
     eprintln!(
-        "{format} compression: fbz {:.1} ms / {:.1} MiB RSS, {program} {:.1} ms / {:.1} MiB RSS, {:.2}x speed",
-        ours.wall.as_secs_f64() * 1_000.0,
-        ours.peak_rss_bytes as f64 / 1_048_576.0,
-        theirs.wall.as_secs_f64() * 1_000.0,
-        theirs.peak_rss_bytes as f64 / 1_048_576.0,
+        "{format} compression: fbz {:.1} ms / {:.1} MiB RSS, {program} {:.1} ms / {:.1} MiB RSS, {:.2}x speed", ours.wall.as_secs_f64() * 1_000.0,
+        ours.peak_rss_bytes as f64 / 1_048_576.0, theirs.wall.as_secs_f64() * 1_000.0, theirs.peak_rss_bytes as f64 / 1_048_576.0,
         theirs.wall.as_secs_f64() / ours.wall.as_secs_f64(),
     );
 }
@@ -65,19 +58,12 @@ enum ZipShape { Single, Many }
 fn zip_inputs(directory: &Path, shape: ZipShape) -> Vec<PathBuf> {
     let contents = support::simplewiki_prefix();
     match shape {
-        ZipShape::Single => {
-            fs::write(directory.join("payload.xml"), contents).unwrap();
-            vec![PathBuf::from("payload.xml")]
-        }
-        ZipShape::Many => contents
-            .chunks(contents.len().div_ceil(18))
-            .enumerate()
-            .map(|(index, chunk)| {
-                let name = PathBuf::from(format!("part-{index:02}.xml"));
-                fs::write(directory.join(&name), chunk).unwrap();
-                name
-            })
-            .collect(),
+        ZipShape::Single => { fs::write(directory.join("payload.xml"), contents).unwrap(); vec![PathBuf::from("payload.xml")] }
+        ZipShape::Many => contents.chunks(contents.len().div_ceil(18)).enumerate().map(|(index, chunk)| {
+            let name = PathBuf::from(format!("part-{index:02}.xml"));
+            fs::write(directory.join(&name), chunk).unwrap();
+            name
+        }).collect(),
     }
 }
 
@@ -109,18 +95,11 @@ fn compare_zip(shape: ZipShape) {
     let our_size = fs::metadata(directory.path().join("fbz.zip")).unwrap().len();
     let their_size = fs::metadata(directory.path().join("zip.zip")).unwrap().len();
     eprintln!(
-        "ZIP {}: fbz {:.1} ms / {:.1} MiB RSS / {:.1} MiB, zip {:.1} ms / {:.1} MiB RSS / {:.1} MiB, {:.2}x speed",
-        match shape {
+        "ZIP {}: fbz {:.1} ms / {:.1} MiB RSS / {:.1} MiB, zip {:.1} ms / {:.1} MiB RSS / {:.1} MiB, {:.2}x speed", match shape {
             ZipShape::Single => "one entry",
             ZipShape::Many => "18 entries",
-        },
-        ours.wall.as_secs_f64() * 1_000.0,
-        ours.peak_rss_bytes as f64 / 1_048_576.0,
-        our_size as f64 / 1_048_576.0,
-        theirs.wall.as_secs_f64() * 1_000.0,
-        theirs.peak_rss_bytes as f64 / 1_048_576.0,
-        their_size as f64 / 1_048_576.0,
-        theirs.wall.as_secs_f64() / ours.wall.as_secs_f64(),
+        }, ours.wall.as_secs_f64() * 1_000.0, ours.peak_rss_bytes as f64 / 1_048_576.0, our_size as f64 / 1_048_576.0, theirs.wall.as_secs_f64() * 1_000.0,
+        theirs.peak_rss_bytes as f64 / 1_048_576.0, their_size as f64 / 1_048_576.0, theirs.wall.as_secs_f64() / ours.wall.as_secs_f64(),
     );
 }
 
@@ -146,11 +125,8 @@ fn compare_tar(format: &str, flag: &str, suffix: &str) {
     assert!(ours.status.success());
     assert!(theirs.status.success());
     eprintln!(
-        ".{suffix} creation: fbz {:.1} ms / {:.1} MiB RSS, tar {:.1} ms / {:.1} MiB RSS, {:.2}x speed",
-        ours.wall.as_secs_f64() * 1_000.0,
-        ours.peak_rss_bytes as f64 / 1_048_576.0,
-        theirs.wall.as_secs_f64() * 1_000.0,
-        theirs.peak_rss_bytes as f64 / 1_048_576.0,
+        ".{suffix} creation: fbz {:.1} ms / {:.1} MiB RSS, tar {:.1} ms / {:.1} MiB RSS, {:.2}x speed", ours.wall.as_secs_f64() * 1_000.0,
+        ours.peak_rss_bytes as f64 / 1_048_576.0, theirs.wall.as_secs_f64() * 1_000.0, theirs.peak_rss_bytes as f64 / 1_048_576.0,
         theirs.wall.as_secs_f64() / ours.wall.as_secs_f64(),
     );
 }

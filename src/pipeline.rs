@@ -1,13 +1,4 @@
-use std::{
-    collections::HashMap,
-    panic::{AssertUnwindSafe, catch_unwind},
-    sync::{
-        Arc, Condvar, Mutex,
-        atomic::{AtomicBool, Ordering},
-        mpsc,
-    },
-    thread,
-};
+use std::{collections::HashMap, panic::{AssertUnwindSafe, catch_unwind}, sync::{Arc, Condvar, Mutex, atomic::{AtomicBool, Ordering}, mpsc}, thread};
 
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
@@ -17,19 +8,9 @@ pub(crate) struct Job<T> { pub key: usize, pub reservation: usize, pub payload: 
 
 pub(crate) struct PipelineLimits { pub memory: usize, pub active: usize }
 
-struct State {
-    next: usize,
-    reserved: usize,
-    active: usize,
-    cancelled: bool,
-}
+struct State { next: usize, reserved: usize, active: usize, cancelled: bool }
 
-struct Budget {
-    limit: usize,
-    max_active: usize,
-    state: Mutex<State>,
-    wake: Condvar,
-}
+struct Budget { limit: usize, max_active: usize, state: Mutex<State>, wake: Condvar }
 
 impl Budget {
     fn new(limit: usize, max_active: usize) -> Self {
@@ -76,12 +57,7 @@ impl Budget {
 type Message<T> = (usize, usize, T);
 
 fn execute_job<T, O>(
-    index: usize,
-    jobs: &[Job<T>],
-    budget: &Budget,
-    sender: &mpsc::Sender<Message<O>>,
-    execute: &impl Fn(&T) -> O,
-    retained_size: &impl Fn(&O) -> usize,
+    index: usize, jobs: &[Job<T>], budget: &Budget, sender: &mpsc::Sender<Message<O>>, execute: &impl Fn(&T) -> O, retained_size: &impl Fn(&O) -> usize
 ) -> bool {
     let job = &jobs[index];
     let value = execute(&job.payload);
@@ -113,17 +89,8 @@ impl<T> OrderedResults<'_, T> {
 }
 
 pub(crate) fn run_ordered<T, O, R>(
-    pool: &ThreadPool,
-    jobs: &[Job<T>],
-    limits: PipelineLimits,
-    execute: impl Fn(&T) -> O + Sync,
-    retained_size: impl Fn(&O) -> usize + Sync,
-    consume: impl FnOnce(&mut OrderedResults<'_, O>) -> Result<R>,
-) -> Result<R>
-where
-    T: Sync,
-    O: Send,
-{
+    pool: &ThreadPool, jobs: &[Job<T>], limits: PipelineLimits, execute: impl Fn(&T) -> O + Sync, retained_size: impl Fn(&O) -> usize + Sync,
+    consume: impl FnOnce(&mut OrderedResults<'_, O>) -> Result<R>) -> Result<R> where T: Sync, O: Send {
     if jobs.iter().any(|job| job.reservation > limits.memory) {
         return Err(Error::InvalidConfiguration("a parallel job reservation exceeds the memory limit".into()));
     }
@@ -169,10 +136,7 @@ impl Budget {
 pub(crate) struct Lease { retained: usize }
 
 pub(crate) struct StagedResults<'a, O, S, Q> {
-    primary: OrderedResults<'a, O>,
-    stage_sender: mpsc::Sender<Message<S>>,
-    stage_receiver: mpsc::Receiver<(usize, Q)>,
-    stage_ready: HashMap<usize, Q>,
+    primary: OrderedResults<'a, O>, stage_sender: mpsc::Sender<Message<S>>, stage_receiver: mpsc::Receiver<(usize, Q)>, stage_ready: HashMap<usize, Q>
 }
 
 impl<'a, O, S, Q> StagedResults<'a, O, S, Q> {
@@ -207,20 +171,9 @@ impl<'a, O, S, Q> StagedResults<'a, O, S, Q> {
 }
 
 pub(crate) fn run_staged_ordered<T, O, S, Q, R>(
-    worker_count: usize,
-    jobs: &[Job<T>],
-    limits: PipelineLimits,
-    execute: impl Fn(&T) -> O + Sync,
-    retained_size: impl Fn(&O) -> usize + Sync,
-    execute_stage: impl Fn(S) -> Q + Sync,
-    consume: impl FnOnce(&mut StagedResults<'_, O, S, Q>) -> Result<R>,
-) -> Result<R>
-where
-    T: Sync,
-    O: Send,
-    S: Send,
-    Q: Send,
-{
+    worker_count: usize, jobs: &[Job<T>], limits: PipelineLimits, execute: impl Fn(&T) -> O + Sync, retained_size: impl Fn(&O) -> usize + Sync,
+    execute_stage: impl Fn(S) -> Q + Sync, consume: impl FnOnce(&mut StagedResults<'_, O, S, Q>) -> Result<R>) -> Result<R> where T: Sync, O: Send, S: Send,
+    Q: Send {
     if jobs.iter().any(|job| job.reservation > limits.memory) {
         return Err(Error::InvalidConfiguration("a parallel job reservation exceeds the memory limit".into()));
     }
@@ -230,32 +183,27 @@ where
     let stage_job_receiver = Mutex::new(stage_job_receiver);
     let (stage_result_sender, stage_receiver) = mpsc::channel();
     thread::scope(|scope| {
-        let workers: Vec<_> = (0..worker_count)
-            .map(|_| {
-                scope.spawn(|| {
-                    loop {
-                        let stage = stage_job_receiver.lock().unwrap_or_else(|error| error.into_inner()).try_recv();
-                        match stage {
-                            Ok((key, retained, payload)) => {
-                                let value = execute_stage(payload);
-                                budget.retire(retained);
-                                if stage_result_sender.send((key, value)).is_err() { return; }
-                                continue;
-                            }
-                            Err(mpsc::TryRecvError::Disconnected) => return,
-                            Err(mpsc::TryRecvError::Empty) => {}
+        let workers: Vec<_> = (0..worker_count).map(|_| {
+            scope.spawn(|| {
+                loop {
+                    let stage = stage_job_receiver.lock().unwrap_or_else(|error| error.into_inner()).try_recv();
+                    match stage {
+                        Ok((key, retained, payload)) => {
+                            let value = execute_stage(payload);
+                            budget.retire(retained);
+                            if stage_result_sender.send((key, value)).is_err() { return; }
+                            continue;
                         }
-                        match budget.try_next(jobs) {
-                            TryNext::Ready(index) => {
-                                if !execute_job(index, jobs, &budget, &primary_sender, &execute, &retained_size) { return; }
-                            }
-                            TryNext::Pending => budget.wait_briefly(),
-                            TryNext::Cancelled => return,
-                        }
+                        Err(mpsc::TryRecvError::Disconnected) => return,
+                        Err(mpsc::TryRecvError::Empty) => {}
                     }
-                })
+                    match budget.try_next(jobs) {
+                        TryNext::Ready(index) => { if !execute_job(index, jobs, &budget, &primary_sender, &execute, &retained_size) { return; } }
+                        TryNext::Pending => budget.wait_briefly(), TryNext::Cancelled => return
+                    }
+                }
             })
-            .collect();
+        }).collect();
         let result = {
             let primary = OrderedResults { receiver: primary_receiver, ready: HashMap::new(), budget: &budget };
             let mut results = StagedResults { primary, stage_sender, stage_receiver, stage_ready: HashMap::new() };
@@ -275,41 +223,19 @@ type StreamingMessage<T> = (usize, usize, std::thread::Result<T>);
 /// the coordinator consumes that result. This is deliberately conservative:
 /// codecs can account for temporary worker allocations in the reservation too.
 pub(crate) struct StreamingOrdered<T> {
-    pool: ThreadPool,
-    sender: mpsc::Sender<StreamingMessage<T>>,
-    receiver: mpsc::Receiver<StreamingMessage<T>>,
-    ready: HashMap<usize, (usize, std::thread::Result<T>)>,
-    next_submit: usize,
-    next_take: usize,
-    reserved: usize,
-    active: usize,
-    max_active: usize,
-    memory_limit: usize,
-    cancelled: Arc<AtomicBool>,
+    pool: ThreadPool, sender: mpsc::Sender<StreamingMessage<T>>, receiver: mpsc::Receiver<StreamingMessage<T>>,
+    ready: HashMap<usize, (usize, std::thread::Result<T>)>, next_submit: usize, next_take: usize, reserved: usize, active: usize, max_active: usize,
+    memory_limit: usize, cancelled: Arc<AtomicBool>
 }
 
 impl<T: Send + 'static> StreamingOrdered<T> {
     pub fn new(threads: usize, memory_limit: usize, thread_name: &'static str) -> Result<Self> {
         let max_active = threads.max(1);
-        let pool = ThreadPoolBuilder::new()
-            .num_threads(max_active)
-            .thread_name(move |index| format!("{thread_name}-{index}"))
-            .build()
+        let pool = ThreadPoolBuilder::new().num_threads(max_active).thread_name(move |index| format!("{thread_name}-{index}")).build()
             .map_err(|error| Error::InvalidConfiguration(error.to_string()))?;
         let (sender, receiver) = mpsc::channel();
-        Ok(Self {
-            pool,
-            sender,
-            receiver,
-            ready: HashMap::new(),
-            next_submit: 0,
-            next_take: 0,
-            reserved: 0,
-            active: 0,
-            max_active,
-            memory_limit,
-            cancelled: Arc::new(AtomicBool::new(false)),
-        })
+        Ok(Self { pool, sender, receiver, ready: HashMap::new(), next_submit: 0, next_take: 0, reserved: 0, active: 0, max_active, memory_limit,
+            cancelled: Arc::new(AtomicBool::new(false)) })
     }
 
     pub fn can_submit(&self, reservation: usize) -> bool { self.active < self.max_active && reservation <= self.memory_limit.saturating_sub(self.reserved) }

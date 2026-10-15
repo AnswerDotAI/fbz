@@ -1,12 +1,4 @@
-use std::{
-    cmp,
-    io::{self, Read, Write},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-        mpsc::{Receiver, SyncSender, sync_channel},
-    },
-};
+use std::{cmp, io::{self, Read, Write}, sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{Receiver, SyncSender, sync_channel}}};
 
 /// Receives decoded bytes and can take ownership of decoder chunks.
 ///
@@ -71,12 +63,7 @@ impl OutputSink for PipeWriter {
 
 /// The consuming side of a bounded owned-chunk output pipe.
 #[doc(hidden)]
-pub struct PipeReader {
-    receiver: Receiver<Chunk>,
-    chunk: Vec<u8>,
-    offset: usize,
-    cancelled: Arc<AtomicBool>,
-}
+pub struct PipeReader { receiver: Receiver<Chunk>, chunk: Vec<u8>, offset: usize, cancelled: Arc<AtomicBool> }
 
 impl Drop for PipeReader { fn drop(&mut self) { self.cancelled.store(true, Ordering::Relaxed); } }
 

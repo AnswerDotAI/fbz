@@ -1,9 +1,4 @@
-use std::{
-    collections::{BTreeSet, HashSet},
-    env, fs,
-    io::{self, Write},
-    path::{Component, Path, PathBuf},
-};
+use std::{collections::{BTreeSet, HashSet}, env, fs, io::{self, Write}, path::{Component, Path, PathBuf}};
 
 use clap::Args;
 use fbz::{Error, Result, zip::PathInput};
@@ -53,15 +48,9 @@ pub(super) fn select(inputs: &[String], filters: &Filters, output: &Path) -> Res
         if output.as_ref() == Some(&source) { return Err(invalid(format!("input and output are both {}", source.display()))); }
         let name = archive_name(Path::new(input))?;
         let directory = fs::symlink_metadata(&source)?.is_dir();
-        let walk = WalkOptions {
-            roots: vec![source.clone()],
-            hidden: true,
-            ignore: filters.ignore,
-            includes: filters.include.clone(),
-            excludes: filters.exclude.clone(),
-            exts: filters.extension.iter().map(|ext| format!("*.{}", ext.trim_start_matches('.'))).collect(),
-            ..Default::default()
-        };
+        let walk = WalkOptions { roots: vec![source.clone()], hidden: true, ignore: filters.ignore, includes: filters.include.clone(),
+            excludes: filters.exclude.clone(), exts: filters.extension.iter().map(|ext| format!("*.{}", ext.trim_start_matches('.'))).collect(),
+            ..Default::default() };
         let opts = FindOptions { walk, dirs: true, special_files: true, ..Default::default() };
         let mut paths = BTreeSet::new();
         for path in rgapi::find_iter(&opts).map_err(|e| invalid(e.to_string()))? {
@@ -99,8 +88,7 @@ pub(super) fn archive_name(path: &Path) -> Result<PathBuf> {
     let relative = if path.is_absolute() {
         let current = env::current_dir()?;
         path.strip_prefix(&current).ok().map(Path::to_path_buf).or_else(|| path.file_name().map(PathBuf::from))
-    } else { Some(path.to_path_buf()) }
-    .ok_or_else(|| invalid(format!("cannot derive an archive name for {}", path.display())))?;
+    } else { Some(path.to_path_buf()) }.ok_or_else(|| invalid(format!("cannot derive an archive name for {}", path.display())))?;
     let mut clean = PathBuf::new();
     for component in relative.components() {
         match component {

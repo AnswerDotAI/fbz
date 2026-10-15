@@ -1,13 +1,6 @@
 mod common;
 
-use std::{
-    ffi::OsStr,
-    fs,
-    io::{self, Write},
-    path::Path,
-    process::{Command, Stdio},
-    time::{Duration, Instant},
-};
+use std::{ffi::OsStr, fs, io::{self, Write}, path::Path, process::{Command, Stdio}, time::{Duration, Instant}};
 
 use fbz::{DecodeOptions, Source, decompress, decompress_to_writer};
 
@@ -56,12 +49,8 @@ fn timed_validation(binary: impl AsRef<OsStr>, path: &Path, threads: usize) -> c
 
 fn print_process_metrics(label: &str, metrics: &common::ProcessMetrics) {
     eprintln!(
-        "{label}: wall {:.3}s, CPU {:.3}s user + {:.3}s system, peak RSS {:.1} MiB, peak physical footprint {:.1} MiB",
-        metrics.wall.as_secs_f64(),
-        metrics.user.as_secs_f64(),
-        metrics.system.as_secs_f64(),
-        metrics.peak_rss_bytes as f64 / (1024.0 * 1024.0),
-        physical_footprint_mib(metrics),
+        "{label}: wall {:.3}s, CPU {:.3}s user + {:.3}s system, peak RSS {:.1} MiB, peak physical footprint {:.1} MiB", metrics.wall.as_secs_f64(),
+        metrics.user.as_secs_f64(), metrics.system.as_secs_f64(), metrics.peak_rss_bytes as f64 / (1024.0 * 1024.0), physical_footprint_mib(metrics),
     );
 }
 

@@ -51,10 +51,7 @@ pub fn transform(block: &[u8]) -> (Vec<u8>, usize) {
 fn sais(s: &[u32], k: usize) -> Vec<u32> {
     let n = s.len();
     let mut sa = vec![EMPTY; n];
-    if n == 1 {
-        sa[0] = 0;
-        return sa;
-    }
+    if n == 1 { sa[0] = 0; return sa; }
 
     let types = classify(s);
     let counts = counts(s, k);
@@ -123,9 +120,7 @@ fn classify(s: &[u32]) -> Vec<bool> {
     types[n - 1] = true;
     for i in (0..n - 1).rev() {
         types[i] = match s[i].cmp(&s[i + 1]) {
-            core::cmp::Ordering::Less => true,
-            core::cmp::Ordering::Greater => false,
-            core::cmp::Ordering::Equal => types[i + 1],
+            core::cmp::Ordering::Less => true, core::cmp::Ordering::Greater => false, core::cmp::Ordering::Equal => types[i + 1]
         };
     }
     types
@@ -332,14 +327,12 @@ mod tests {
     #[test]
     fn round_trips_high_entropy_data() {
         let mut state = 0x9e37_79b9u32;
-        let block: Vec<u8> = (0..30_000)
-            .map(|_| {
-                state ^= state << 13;
-                state ^= state >> 17;
-                state ^= state << 5;
-                (state >> 24) as u8
-            })
-            .collect();
+        let block: Vec<u8> = (0..30_000).map(|_| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            (state >> 24) as u8
+        }).collect();
         let (last, orig) = transform(&block);
         assert_eq!(inverse(&last, orig), block);
     }

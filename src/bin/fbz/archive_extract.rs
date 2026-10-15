@@ -1,16 +1,11 @@
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{fs, io, path::{Path, PathBuf}};
 
 use fbz::{Error, Result};
 use tempfile::TempDir;
 
 fn path_metadata(path: &Path) -> io::Result<Option<fs::Metadata>> {
     match fs::symlink_metadata(path) {
-        Ok(metadata) => Ok(Some(metadata)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error),
+        Ok(metadata) => Ok(Some(metadata)), Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None), Err(error) => Err(error)
     }
 }
 
@@ -52,10 +47,7 @@ fn make_directory_mutable(path: &Path, metadata: &fs::Metadata) -> io::Result<()
 
 fn commit_entry(source: &Path, target: &Path, overwrite: bool) -> Result<()> {
     let source_metadata = fs::symlink_metadata(source)?;
-    let Some(target_metadata) = path_metadata(target)? else {
-        fs::rename(source, target)?;
-        return Ok(());
-    };
+    let Some(target_metadata) = path_metadata(target)? else { fs::rename(source, target)?; return Ok(()); };
     if source_metadata.is_dir() && target_metadata.is_dir() {
         make_directory_mutable(source, &source_metadata)?;
         for child in children(source)? { commit_entry(&child, &target.join(child.file_name().unwrap()), overwrite)?; }

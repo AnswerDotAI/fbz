@@ -4,11 +4,7 @@ use fbz::{DecodeOptions, MAX_DECODED_BLOCK, lz4};
 use lz4_flex::frame::{BlockMode, BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
 
 fn encode(data: &[u8], block_size: BlockSize, block_mode: BlockMode, block_checksum: bool, content_checksum: bool, content_size: bool) -> Vec<u8> {
-    let info = FrameInfo::new()
-        .block_size(block_size)
-        .block_mode(block_mode)
-        .block_checksums(block_checksum)
-        .content_checksum(content_checksum)
+    let info = FrameInfo::new().block_size(block_size).block_mode(block_mode).block_checksums(block_checksum).content_checksum(content_checksum)
         .content_size(content_size.then_some(data.len() as u64));
     let mut encoder = FrameEncoder::with_frame_info(info, Vec::new());
     encoder.write_all(data).unwrap();
@@ -22,14 +18,12 @@ fn oracle_decode(encoded: &[u8]) -> Vec<u8> {
 }
 
 fn pseudorandom(length: u32) -> Vec<u8> {
-    (0..length)
-        .scan(0x9e37_79b9_u32, |state, _| {
-            *state ^= *state << 13;
-            *state ^= *state >> 17;
-            *state ^= *state << 5;
-            Some(*state as u8)
-        })
-        .collect()
+    (0..length).scan(0x9e37_79b9_u32, |state, _| {
+        *state ^= *state << 13;
+        *state ^= *state >> 17;
+        *state ^= *state << 5;
+        Some(*state as u8)
+    }).collect()
 }
 
 fn assert_matches(data: &[u8], encoded: &[u8], options: DecodeOptions) {
@@ -55,10 +49,7 @@ fn frame_matrix_matches_lz4_flex() {
     }
 
     let shapes = [
-        Vec::new(),
-        b"short LZ4 payload".to_vec(),
-        b"repeated dictionary material ".repeat(2_000),
-        (0_u8..=255).collect::<Vec<_>>().repeat(200),
+        Vec::new(), b"short LZ4 payload".to_vec(), b"repeated dictionary material ".repeat(2_000), (0_u8..=255).collect::<Vec<_>>().repeat(200),
         pseudorandom(50_000),
     ];
     for data in shapes {

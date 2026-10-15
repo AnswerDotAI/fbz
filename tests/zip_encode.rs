@@ -2,10 +2,7 @@ mod support;
 
 use std::{fs, path::PathBuf, process::Command};
 
-use fbz::{
-    EncodeOptions,
-    zip::{PathInput, create_to_writer},
-};
+use fbz::{EncodeOptions, zip::{PathInput, create_to_writer}};
 
 #[test]
 fn zip_encoder_roundtrips_files_and_directories() {
@@ -18,11 +15,8 @@ fn zip_encoder_roundtrips_files_and_directories() {
 
     let mut encoded = Vec::new();
     let report = create_to_writer(
-        &["", "small.txt", "repeated.bin"].map(|name| PathInput { source: source.join(name), archive_path: PathBuf::from("bundle").join(name) }),
-        &mut encoded,
-        EncodeOptions { threads: 4, memory_limit: 64 * 1024 * 1024, level: Some(6) },
-    )
-    .unwrap();
+        &["", "small.txt", "repeated.bin"].map(|name| PathInput { source: source.join(name), archive_path: PathBuf::from("bundle").join(name) }), &mut encoded,
+        EncodeOptions { threads: 4, memory_limit: 64 * 1024 * 1024, level: Some(6) }).unwrap();
     assert_eq!(report.entries, 3);
 
     let path = directory.path().join("archive.zip");
@@ -44,11 +38,8 @@ fn zip_encoder_uses_parallel_deflate_for_a_large_entry() {
     fs::write(&source, &plain).unwrap();
     let mut encoded = Vec::new();
     create_to_writer(
-        &[PathInput { source, archive_path: PathBuf::from("large.bin") }],
-        &mut encoded,
-        EncodeOptions { threads: 4, memory_limit: 64 * 1024 * 1024, level: Some(3) },
-    )
-    .unwrap();
+        &[PathInput { source, archive_path: PathBuf::from("large.bin") }], &mut encoded,
+        EncodeOptions { threads: 4, memory_limit: 64 * 1024 * 1024, level: Some(3) }).unwrap();
     let path = directory.path().join("large.zip");
     fs::write(&path, encoded).unwrap();
     let decoded = Command::new("unzip").args(["-p", path.to_str().unwrap(), "large.bin"]).output().unwrap();

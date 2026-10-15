@@ -2,12 +2,7 @@
 mod common;
 mod support;
 
-use std::{
-    fs,
-    path::PathBuf,
-    process::Command,
-    time::{Duration, Instant},
-};
+use std::{fs, path::PathBuf, process::Command, time::{Duration, Instant}};
 
 use support::{ZipMethod, simplewiki_prefix, zip_bytes};
 
@@ -18,13 +13,7 @@ fn requested_threads() -> usize { std::env::var("FBZ_THREADS").ok().map(|value| 
 #[derive(Clone, Copy)]
 enum Shape { Single, Many }
 
-struct Fixture {
-    directory: tempfile::TempDir,
-    input: PathBuf,
-    contents: Vec<u8>,
-    chunk_size: usize,
-    shape: Shape,
-}
+struct Fixture { directory: tempfile::TempDir, input: PathBuf, contents: Vec<u8>, chunk_size: usize, shape: Shape }
 
 impl Fixture {
     fn new(shape: Shape) -> Self {
@@ -43,13 +32,10 @@ impl Fixture {
         let input = directory.path().join("fixture.zip");
         fs::write(&input, &archive).unwrap();
         eprintln!(
-            "ZIP fixture: {} entries, {:.1} MiB compressed, {:.1} MiB decoded",
-            match shape {
+            "ZIP fixture: {} entries, {:.1} MiB compressed, {:.1} MiB decoded", match shape {
                 Shape::Single => 1,
                 Shape::Many => ENTRY_COUNT,
-            },
-            archive.len() as f64 / 1_048_576.0,
-            contents.len() as f64 / 1_048_576.0
+            }, archive.len() as f64 / 1_048_576.0, contents.len() as f64 / 1_048_576.0
         );
         Self { directory, input, contents, chunk_size, shape }
     }
@@ -120,11 +106,8 @@ fn zip_many_fbz_process_metrics() {
     assert!(metrics.status.success());
     fixture.verify(&output);
     eprintln!(
-        "fbz ZIP: wall {:.3}s, CPU {:.3}s user + {:.3}s system, peak RSS {:.1} MiB, peak physical footprint {:.1} MiB",
-        metrics.wall.as_secs_f64(),
-        metrics.user.as_secs_f64(),
-        metrics.system.as_secs_f64(),
-        metrics.peak_rss_bytes as f64 / 1_048_576.0,
+        "fbz ZIP: wall {:.3}s, CPU {:.3}s user + {:.3}s system, peak RSS {:.1} MiB, peak physical footprint {:.1} MiB", metrics.wall.as_secs_f64(),
+        metrics.user.as_secs_f64(), metrics.system.as_secs_f64(), metrics.peak_rss_bytes as f64 / 1_048_576.0,
         metrics.peak_phys_footprint_bytes.map_or(f64::NAN, |bytes| bytes as f64 / 1_048_576.0),
     );
 }
@@ -140,10 +123,7 @@ fn zip_many_unzip_process_metrics() {
     fixture.verify(&output);
     eprintln!(
         "Info-ZIP unzip 6.00 (Apple): wall {:.3}s, CPU {:.3}s user + {:.3}s system, peak RSS {:.1} MiB, peak physical footprint {:.1} MiB",
-        metrics.wall.as_secs_f64(),
-        metrics.user.as_secs_f64(),
-        metrics.system.as_secs_f64(),
-        metrics.peak_rss_bytes as f64 / 1_048_576.0,
+        metrics.wall.as_secs_f64(), metrics.user.as_secs_f64(), metrics.system.as_secs_f64(), metrics.peak_rss_bytes as f64 / 1_048_576.0,
         metrics.peak_phys_footprint_bytes.map_or(f64::NAN, |bytes| bytes as f64 / 1_048_576.0),
     );
 }

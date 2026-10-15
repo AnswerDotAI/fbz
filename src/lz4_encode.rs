@@ -1,15 +1,8 @@
-use std::{
-    hash::Hasher as _,
-    io::{self, Read, Write},
-};
+use std::{hash::Hasher as _, io::{self, Read, Write}};
 
 use twox_hash::XxHash32;
 
-use crate::{
-    EncodeOptions, Error, Result,
-    matchfinder::{HashChain, LatestMatch, match_length},
-    pipeline::StreamingOrdered,
-};
+use crate::{EncodeOptions, Error, Result, matchfinder::{HashChain, LatestMatch, match_length}, pipeline::StreamingOrdered};
 
 const MAGIC: u32 = 0x184d_2204;
 const WINDOW_SIZE: usize = u16::MAX as usize;
@@ -62,10 +55,7 @@ fn compress_block_fast(input: &[u8]) -> Vec<u8> {
     let mut position = 0;
     while position + 12 <= input.len() {
         let max_length = input.len() - position - 5;
-        let Some(mut candidate) = finder.insert_and_find(input, position) else {
-            position += 1 + ((position - anchor) >> 6);
-            continue;
-        };
+        let Some(mut candidate) = finder.insert_and_find(input, position) else { position += 1 + ((position - anchor) >> 6); continue; };
         let distance = position - candidate;
         let mut length = match_length(input, position, candidate, max_length);
         while position > anchor && candidate > 0 && input[position - 1] == input[candidate - 1] {
@@ -135,16 +125,8 @@ fn selected_block_size(memory_limit: usize) -> Result<usize> {
 fn descriptor_code(block_size: usize) -> u8 { match block_size { 64_000..=65_536 => 4, 65_537..=262_144 => 5, 262_145..=1_048_576 => 6, _ => 7 } }
 
 pub struct Encoder<W: Write> {
-    output: Option<W>,
-    pipeline: StreamingOrdered<Block>,
-    options: EncodeOptions,
-    buffer: Vec<u8>,
-    block_size: usize,
-    reservation: usize,
-    content_hash: XxHash32,
-    input_len: u64,
-    output_len: u64,
-    blocks: u64,
+    output: Option<W>, pipeline: StreamingOrdered<Block>, options: EncodeOptions, buffer: Vec<u8>, block_size: usize, reservation: usize,
+    content_hash: XxHash32, input_len: u64, output_len: u64, blocks: u64
 }
 
 impl<W: Write> Encoder<W> {
@@ -159,18 +141,8 @@ impl<W: Write> Encoder<W> {
         let checksum = (xxhash32(&[flg, bd]) >> 8) as u8;
         output.write_all(&MAGIC.to_le_bytes())?;
         output.write_all(&[flg, bd, checksum])?;
-        Ok(Self {
-            output: Some(output),
-            pipeline: StreamingOrdered::new(workers, options.memory_limit, "fbz-lz4-encode")?,
-            options,
-            buffer: Vec::with_capacity(block_size),
-            block_size,
-            reservation,
-            content_hash: XxHash32::with_seed(0),
-            input_len: 0,
-            output_len: 7,
-            blocks: 0,
-        })
+        Ok(Self { output: Some(output), pipeline: StreamingOrdered::new(workers, options.memory_limit, "fbz-lz4-encode")?, options,
+            buffer: Vec::with_capacity(block_size), block_size, reservation, content_hash: XxHash32::with_seed(0), input_len: 0, output_len: 7, blocks: 0 })
     }
 
     fn commit_next(&mut self) -> Result<()> {

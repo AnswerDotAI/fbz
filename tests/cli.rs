@@ -1,10 +1,4 @@
-use std::{
-    fs,
-    io::{Cursor, Write},
-    path::Path,
-    process::{Command, Stdio},
-    time::{Duration, UNIX_EPOCH},
-};
+use std::{fs, io::{Cursor, Write}, path::Path, process::{Command, Stdio}, time::{Duration, UNIX_EPOCH}};
 
 use crabz2::{Level, compress};
 use flate2::{Compression, write::GzEncoder};
@@ -27,11 +21,7 @@ fn gzip_bytes(plain: &[u8]) -> Vec<u8> {
 fn write_gzip(path: &Path, plain: &[u8]) { fs::write(path, gzip_bytes(plain)).unwrap(); }
 
 fn lz4_bytes(plain: &[u8], mode: Lz4BlockMode) -> Vec<u8> {
-    let info = Lz4FrameInfo::new()
-        .block_size(Lz4BlockSize::Max64KB)
-        .block_mode(mode)
-        .block_checksums(true)
-        .content_checksum(true)
+    let info = Lz4FrameInfo::new().block_size(Lz4BlockSize::Max64KB).block_mode(mode).block_checksums(true).content_checksum(true)
         .content_size(Some(plain.len() as u64));
     let mut encoder = Lz4Encoder::with_frame_info(info, Vec::new());
     encoder.write_all(plain).unwrap();
@@ -40,8 +30,7 @@ fn lz4_bytes(plain: &[u8], mode: Lz4BlockMode) -> Vec<u8> {
 
 fn linked_zip() -> Vec<u8> {
     zip_with_modes(&[
-        ("nested/", b"", ZipMethod::Stored, 0o040750),
-        ("nested/root.txt", b"linked contents", ZipMethod::Deflate, 0o100640),
+        ("nested/", b"", ZipMethod::Stored, 0o040750), ("nested/root.txt", b"linked contents", ZipMethod::Deflate, 0o100640),
         ("nested/symbolic.txt", b"root.txt", ZipMethod::Deflate, 0o120777),
     ])
 }
@@ -82,10 +71,7 @@ fn archive_names(path: &Path) -> Vec<String> {
         ZipArchive::new(Cursor::new(bytes)).unwrap().file_names().map(|name| name.trim_end_matches('/').to_owned()).collect()
     } else {
         let tar = fbz::decompress(&bytes, Default::default()).unwrap();
-        tar::Archive::new(tar.as_slice())
-            .entries()
-            .unwrap()
-            .map(|entry| entry.unwrap().path().unwrap().display().to_string().trim_end_matches('/').to_owned())
+        tar::Archive::new(tar.as_slice()).entries().unwrap().map(|entry| entry.unwrap().path().unwrap().display().to_string().trim_end_matches('/').to_owned())
             .collect()
     };
     names.sort();
@@ -98,30 +84,16 @@ fn archive_selection_and_preview_share_filters_across_formats() {
     let root = directory.path().join("project");
     for dir in ["src/deep", "src/tests", "tests", "empty", ".git"] { fs::create_dir_all(root.join(dir)).unwrap(); }
     for name in [
-        ".hidden.py",
-        "ignored.py",
-        "local.py",
-        "search.py",
-        "README.md",
-        "src/app.py",
-        "src/deep/nested.py",
-        "src/tests/bad.py",
-        "tests/bad.py",
-        ".git/config",
+        ".hidden.py", "ignored.py", "local.py", "search.py", "README.md", "src/app.py", "src/deep/nested.py", "src/tests/bad.py", "tests/bad.py", ".git/config",
     ] { fs::write(root.join(name), name).unwrap(); }
     for (name, contents) in [(".gitignore", "ignored.py"), (".ignore", "local.py"), (".rgignore", "search.py")] {
         fs::write(root.join(name), contents).unwrap();
     }
     let cases: &[(&[&str], &[&str])] = &[
-        (
-            &["-i", "-E", "tests", "-E", ".git", "--include", "*.py", "--include", "*.md", "-e", "py", "-e", "md"],
-            &["project", "project/.hidden.py", "project/README.md", "project/src", "project/src/app.py", "project/src/deep", "project/src/deep/nested.py"],
-        ),
-        (&["--include", "src/*", "-e", "py"], &["project", "project/src", "project/src/app.py"]),
-        (
-            &["--include", "src/**", "-e", "py", "-E", "tests"],
-            &["project", "project/src", "project/src/app.py", "project/src/deep", "project/src/deep/nested.py"],
-        ),
+        (&["-i", "-E", "tests", "-E", ".git", "--include", "*.py", "--include", "*.md", "-e", "py", "-e", "md"],
+            &["project", "project/.hidden.py", "project/README.md", "project/src", "project/src/app.py", "project/src/deep", "project/src/deep/nested.py"]),
+        (&["--include", "src/*", "-e", "py"], &["project", "project/src", "project/src/app.py"]), (&["--include", "src/**", "-e", "py", "-E", "tests"],
+            &["project", "project/src", "project/src/app.py", "project/src/deep", "project/src/deep/nested.py"]),
     ];
     for suffix in ["zip", "tar.gz", "tar.bz2", "tar.lz4"] {
         let output = format!("archive.{suffix}");
@@ -435,11 +407,7 @@ fn commands_aliases_and_implicit_paths_are_unambiguous() {
         assert_eq!(fbz::gzip::decompress(&output.stdout).unwrap(), plain);
     }
     for args in [
-        vec!["payload.gz"],
-        vec!["d", "payload.gz"],
-        vec!["decompress", "payload.gz"],
-        vec!["-qP1", "d", "payload.gz"],
-        vec!["-P", "1", "payload.gz"],
+        vec!["payload.gz"], vec!["d", "payload.gz"], vec!["decompress", "payload.gz"], vec!["-qP1", "d", "payload.gz"], vec!["-P", "1", "payload.gz"],
         vec!["--memory-limit=64M", "payload.gz"],
     ] {
         let output = binary().current_dir(directory.path()).args(args).args(["-o", "-"]).output().unwrap();
@@ -921,10 +889,8 @@ fn zip_stored_deflate_limits_corruption_and_paths_are_atomic() {
     fs::write(&input, &archive).unwrap();
 
     let limited = directory.path().join("limited");
-    let result = binary()
-        .args(["--max-output", &(plain.len() + stored.len() - 1).to_string(), "-C", limited.to_str().unwrap(), input.to_str().unwrap()])
-        .output()
-        .unwrap();
+    let result = binary().args(["--max-output", &(plain.len() + stored.len() - 1).to_string(), "-C", limited.to_str().unwrap(), input.to_str().unwrap()])
+        .output().unwrap();
     assert_eq!(result.status.code(), Some(3));
     assert_eq!(fs::read_dir(&limited).unwrap().count(), 0);
 

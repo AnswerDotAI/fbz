@@ -1,19 +1,10 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    io::{self, Read, Seek, SeekFrom},
-    path::Path,
-};
+use std::{collections::{HashMap, VecDeque}, io::{self, Read, Seek, SeekFrom}, path::Path};
 
 use crate::{DecodeOptions, Error, Index, Result, Source, build_index, decode_block};
 
 pub const DEFAULT_CACHE_LIMIT: usize = 64 * 1024 * 1024;
 
-pub struct IndexedReader {
-    source: Source,
-    index: Index,
-    position: u64,
-    cache: BlockCache,
-}
+pub struct IndexedReader { source: Source, index: Index, position: u64, cache: BlockCache }
 
 impl IndexedReader {
     pub fn open(path: impl AsRef<Path>, options: DecodeOptions) -> Result<Self> { Self::from_source(Source::open(path)?, None, options, DEFAULT_CACHE_LIMIT) }
@@ -86,9 +77,8 @@ impl Read for IndexedReader {
 impl Seek for IndexedReader {
     fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
         let next = match position {
-            SeekFrom::Start(position) => i128::from(position),
-            SeekFrom::Current(offset) => i128::from(self.position) + i128::from(offset),
-            SeekFrom::End(offset) => i128::from(self.index.decoded_len) + i128::from(offset),
+            SeekFrom::Start(position) => i128::from(position), SeekFrom::Current(offset) => i128::from(self.position) + i128::from(offset),
+            SeekFrom::End(offset) => i128::from(self.index.decoded_len) + i128::from(offset)
         };
         if !(0..=i128::from(self.index.decoded_len)).contains(&next) {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "seek outside decompressed data"));
@@ -98,12 +88,7 @@ impl Seek for IndexedReader {
     }
 }
 
-struct BlockCache {
-    entries: HashMap<usize, Vec<u8>>,
-    order: VecDeque<usize>,
-    bytes: usize,
-    limit: usize,
-}
+struct BlockCache { entries: HashMap<usize, Vec<u8>>, order: VecDeque<usize>, bytes: usize, limit: usize }
 
 impl BlockCache {
     fn new(limit: usize) -> Self { Self { entries: HashMap::new(), order: VecDeque::new(), bytes: 0, limit } }

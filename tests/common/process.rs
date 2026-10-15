@@ -1,20 +1,11 @@
-use std::{
-    io,
-    mem::MaybeUninit,
-    os::unix::process::ExitStatusExt,
-    process::{Command, ExitStatus},
-    time::{Duration, Instant},
-};
+use std::{io, mem::MaybeUninit, os::unix::process::ExitStatusExt, process::{Command, ExitStatus}, time::{Duration, Instant}};
 
 struct FootprintSampler { stop: std::sync::Arc<std::sync::atomic::AtomicBool>, worker: std::thread::JoinHandle<Option<u64>> }
 
 #[cfg(target_os = "macos")]
 impl FootprintSampler {
     fn start(pid: libc::pid_t) -> Self {
-        use std::sync::{
-            Arc,
-            atomic::{AtomicBool, Ordering},
-        };
+        use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = Arc::clone(&stop);
         let initial = physical_footprint(pid);
@@ -58,12 +49,7 @@ pub struct Timing { pub status: ExitStatus, pub wall: Duration }
 
 #[derive(Clone, Copy, Debug)]
 pub struct ProcessMetrics {
-    pub status: ExitStatus,
-    pub wall: Duration,
-    pub user: Duration,
-    pub system: Duration,
-    pub peak_rss_bytes: u64,
-    pub peak_phys_footprint_bytes: Option<u64>,
+    pub status: ExitStatus, pub wall: Duration, pub user: Duration, pub system: Duration, pub peak_rss_bytes: u64, pub peak_phys_footprint_bytes: Option<u64>
 }
 
 pub fn measure_timing(command: &mut Command) -> io::Result<Timing> {
@@ -97,14 +83,8 @@ pub fn measure(command: &mut Command) -> io::Result<ProcessMetrics> {
     let peak_rss_bytes = (usage.ru_maxrss as u64).saturating_mul(1024);
     sampler.stop.store(true, std::sync::atomic::Ordering::Relaxed);
     let peak_phys_footprint_bytes = sampler.worker.join().unwrap_or(None);
-    Ok(ProcessMetrics {
-        status: ExitStatus::from_raw(status),
-        wall,
-        user: duration(usage.ru_utime),
-        system: duration(usage.ru_stime),
-        peak_rss_bytes,
-        peak_phys_footprint_bytes,
-    })
+    Ok(ProcessMetrics { status: ExitStatus::from_raw(status), wall, user: duration(usage.ru_utime), system: duration(usage.ru_stime), peak_rss_bytes,
+        peak_phys_footprint_bytes })
 }
 
 #[test]

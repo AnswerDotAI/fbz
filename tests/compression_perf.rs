@@ -34,13 +34,8 @@ fn gzip_compression_comparison() {
 
     assert_eq!(gzip::decompress(&ours).unwrap(), input);
     eprintln!(
-        "gzip compression: fbz {:.3?} {} bytes; flate2 {:.3?} {} bytes; speed {:.2}x, size {:.3}x",
-        ours_time,
-        ours.len(),
-        oracle_time,
-        oracle.len(),
-        oracle_time.as_secs_f64() / ours_time.as_secs_f64(),
-        ours.len() as f64 / oracle.len() as f64,
+        "gzip compression: fbz {:.3?} {} bytes; flate2 {:.3?} {} bytes; speed {:.2}x, size {:.3}x", ours_time, ours.len(), oracle_time, oracle.len(),
+        oracle_time.as_secs_f64() / ours_time.as_secs_f64(), ours.len() as f64 / oracle.len() as f64,
     );
 }
 
@@ -60,13 +55,8 @@ fn lz4_compression_comparison() {
 
     assert_eq!(fbz::lz4::decompress(&ours).unwrap(), input);
     eprintln!(
-        "LZ4 compression: fbz {:.3?} {} bytes; lz4_flex {:.3?} {} bytes; speed {:.2}x, size {:.3}x",
-        ours_time,
-        ours.len(),
-        oracle_time,
-        oracle.len(),
-        oracle_time.as_secs_f64() / ours_time.as_secs_f64(),
-        ours.len() as f64 / oracle.len() as f64,
+        "LZ4 compression: fbz {:.3?} {} bytes; lz4_flex {:.3?} {} bytes; speed {:.2}x, size {:.3}x", ours_time, ours.len(), oracle_time, oracle.len(),
+        oracle_time.as_secs_f64() / ours_time.as_secs_f64(), ours.len() as f64 / oracle.len() as f64,
     );
 }
 
