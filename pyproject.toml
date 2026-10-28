@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.9.2,<2.0", "fastws-cli>=0.0.20"]
+requires = ["maturin>=1.13,<2.0", "fastws-cli>=0.0.29"]
 build-backend = "fastws.build_backend"
 
 [project]
@@ -16,7 +16,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["fastws-cli>=0.0.20", "fastship>=0.1.8", "maturin>=1.0,<2.0", "pytest"]
+dev = ["fastws-cli>=0.0.29", "fastship>=0.1.8", "maturin>=1.13,<2.0", "pytest"]
 
 [project.urls]
 Homepage = "https://github.com/AnswerDotAI/fbz"

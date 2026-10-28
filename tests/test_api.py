@@ -78,10 +78,20 @@ def test_stream_reader_readinto_and_explicit_format(tmp_path):
     source.write_bytes(gzip.compress(plain))
     target = bytearray(len(plain) + 100)
     with fbz.Reader(source, format="gzip", threads=2) as handle:
+        assert handle.readinto(bytearray()) == 0
         count = handle.readinto(memoryview(target)[17:])
         assert count <= 1024 * 1024
         assert target[17:17 + count] == plain[:count]
+        assert target[:17] == bytes(17) and target[17 + count:] == bytes(len(target) - 17 - count)
         assert bytes(target[17:17 + count]) + handle.read() == plain
+
+@pytest.mark.parametrize("target", [b"----", memoryview(bytearray(8))[::2]])
+def test_stream_reader_rejects_readonly_and_noncontiguous_buffers(tmp_path, target):
+    source = tmp_path / "data.gz"
+    source.write_bytes(gzip.compress(b"data"))
+    with fbz.Reader(source) as handle:
+        with pytest.raises(TypeError, match="writable, contiguous"): handle.readinto(target)
+        assert handle.read() == b"data"
 
 def test_stream_reader_reports_late_checksum_failure(tmp_path):
     plain = patterned(1_000_000)

@@ -123,13 +123,17 @@ impl PyReader {
     }
 
     fn readinto(&self, py: Python<'_>, buffer: PyBuffer<u8>) -> PyResult<usize> {
-        if buffer.as_mut_slice(py).is_none() { return Err(PyTypeError::new_err("readinto() requires a writable, contiguous byte buffer")); }
+        if buffer.readonly() || !buffer.is_c_contiguous() { return Err(PyTypeError::new_err("readinto() requires a writable, contiguous byte buffer")); }
         let mut output = vec![0; buffer.item_count().min(PY_READINTO_CHUNK)];
         let count = py.detach(|| {
             let mut reader = self.inner.lock().map_err(|_| std::io::Error::other("reader lock poisoned"))?;
             reader.read(&mut output)
         }).map_err(python_read_error)?;
-        for (destination, byte) in buffer.as_mut_slice(py).unwrap()[..count].iter().zip(&output) { destination.set(*byte); }
+        // SAFETY: the live buffer export pins writable, contiguous storage, and count fits both allocations.
+        // The fresh output cannot overlap it. Copy only with the GIL (required by this module), without Python calls or Rust references to its storage.
+        if count != 0 {
+            unsafe { std::ptr::copy_nonoverlapping(output.as_ptr(), buffer.as_slice_ptr().unwrap().as_ptr().cast::<u8>(), count); }
+        }
         Ok(count)
     }
 }
@@ -199,7 +203,7 @@ impl PyIndexedReader {
     }
 }
 
-#[pymodule]
+#[pymodule(gil_used = true)]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_scan, m)?)?;
     m.add_function(wrap_pyfunction!(py_bz2_crc32, m)?)?;
