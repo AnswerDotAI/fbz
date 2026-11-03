@@ -57,7 +57,7 @@ brew trust --tap AnswerDotAI/tap
 brew install fbz
 ```
 
-Python 3.10 and later are supported. Prebuilt wheels target Linux on x86-64 and ARM64, and macOS on ARM64. macOS Intel is best-effort and can build from source.
+Python 3.11 and later are supported. Prebuilt wheels target Linux on x86-64 and ARM64, and macOS on ARM64. macOS Intel is best-effort and can build from source.
 
 Install the native CLI or add the Rust library from crates.io:
 

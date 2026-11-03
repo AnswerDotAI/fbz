@@ -7,7 +7,7 @@ name = "fbz"
 dynamic = ["version"]
 description = "Fast parallel compression and decompression for bzip2, gzip, LZ4, tar, and ZIP"
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 authors = [{name = "Jeremy Howard", email = "github@jhoward.fastmail.fm"}]
 classifiers = [
