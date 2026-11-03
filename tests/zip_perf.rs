@@ -1,3 +1,4 @@
+use std::env;
 use std::path::Path;
 #[allow(dead_code, unused_imports)]
 mod common;
@@ -9,7 +10,7 @@ use support::{ZipMethod, simplewiki_prefix, zip_bytes};
 
 const ENTRY_COUNT: usize = 18;
 
-fn requested_threads() -> usize { std::env::var("FBZ_THREADS").ok().map(|value| value.parse().expect("FBZ_THREADS must be an integer")).unwrap_or(0) }
+fn requested_threads() -> usize { env::var("FBZ_THREADS").ok().map(|value| value.parse().expect("FBZ_THREADS must be an integer")).unwrap_or(0) }
 
 #[derive(Clone, Copy)]
 enum Shape { Single, Many }

@@ -1,7 +1,7 @@
 //! Gzip framing and DEFLATE compression/decompression implemented in safe Rust.
 
 use crc32fast::Hasher;
-use std::{io::Write, sync::OnceLock};
+use std::{io, io::Write, sync::OnceLock};
 
 use crate::{
     DecodeOptions, DecodeProgress, EncodeOptions, Error, OutputSink, Result, WriterSink, deflate::{DISTANCE_BASE, DISTANCE_EXTRA, LENGTH_BASE, LENGTH_EXTRA},
@@ -70,22 +70,22 @@ impl<W: Write> Encoder<W> {
 }
 
 impl<W: Write> Write for Encoder<W> {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> { self.inner.write(bytes) }
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> { self.inner.write(bytes) }
 
-    fn flush(&mut self) -> std::io::Result<()> { self.inner.flush() }
+    fn flush(&mut self) -> io::Result<()> { self.inner.flush() }
 }
 
 pub fn compress(data: &[u8]) -> Result<Vec<u8>> { compress_with_options(data, EncodeOptions::default()) }
 
 pub fn compress_with_options(data: &[u8], options: EncodeOptions) -> Result<Vec<u8>> {
     let mut output = Vec::new();
-    compress_to_writer(&mut std::io::Cursor::new(data), &mut output, options)?;
+    compress_to_writer(&mut io::Cursor::new(data), &mut output, options)?;
     Ok(output)
 }
 
-pub fn compress_to_writer(input: &mut impl std::io::Read, output: &mut impl Write, options: EncodeOptions) -> Result<EncodeReport> {
+pub fn compress_to_writer(input: &mut impl io::Read, output: &mut impl Write, options: EncodeOptions) -> Result<EncodeReport> {
     let mut encoder = Encoder::new(output, options)?;
-    std::io::copy(input, &mut encoder)?;
+    io::copy(input, &mut encoder)?;
     let (_, report) = encoder.finish()?;
     Ok(report)
 }

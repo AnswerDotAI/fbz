@@ -1,5 +1,5 @@
 use serde_json::Value;
-use std::{fs, io::{Cursor, Write}, path::Path, process::{Command, Stdio}, time::{Duration, UNIX_EPOCH}};
+use std::{fs, io, io::{Cursor, Write}, path::Path, process::{Command, Stdio}, time::{Duration, UNIX_EPOCH}};
 use tar::{Builder, EntryType, Header};
 
 use crabz2::{Level, compress};
@@ -358,7 +358,7 @@ fn linked_tar() -> Vec<u8> {
             link.set_mode(0o777);
             link.set_mtime(1_700_000_123);
             link.set_cksum();
-            builder.append(&link, std::io::empty()).unwrap();
+            builder.append(&link, io::empty()).unwrap();
         }
         builder.finish().unwrap();
     }

@@ -216,7 +216,7 @@ pub(crate) fn run_staged_ordered<T, O, S, Q, R>(
     })
 }
 
-type StreamingMessage<T> = (usize, usize, std::thread::Result<T>);
+type StreamingMessage<T> = (usize, usize, thread::Result<T>);
 
 /// A bounded, long-lived ordered worker pool for streaming producers.
 ///
@@ -225,7 +225,7 @@ type StreamingMessage<T> = (usize, usize, std::thread::Result<T>);
 /// codecs can account for temporary worker allocations in the reservation too.
 pub(crate) struct StreamingOrdered<T> {
     pool: ThreadPool, sender: mpsc::Sender<StreamingMessage<T>>, receiver: mpsc::Receiver<StreamingMessage<T>>,
-    ready: HashMap<usize, (usize, std::thread::Result<T>)>, next_submit: usize, next_take: usize, reserved: usize, active: usize, max_active: usize,
+    ready: HashMap<usize, (usize, thread::Result<T>)>, next_submit: usize, next_take: usize, reserved: usize, active: usize, max_active: usize,
     memory_limit: usize, cancelled: Arc<AtomicBool>
 }
 

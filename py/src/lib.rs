@@ -1,4 +1,5 @@
 use fbz::{DecodeFormat, DecodeOptions, EncodeFormat, Error, IndexedReader, Reader, Source};
+use std::io;
 use std::io::ErrorKind;
 use std::path::Path;
 use std::{io::{Read, Seek, SeekFrom}, sync::Mutex};
@@ -26,7 +27,7 @@ fn python_error(error: Error) -> PyErr {
     }
 }
 
-fn python_read_error(error: std::io::Error) -> PyErr {
+fn python_read_error(error: io::Error) -> PyErr {
     match error.kind() {
         ErrorKind::InvalidData => BadCompressedFile::new_err(error.to_string()), ErrorKind::InvalidInput => PyValueError::new_err(error.to_string()),
         _ => PyOSError::new_err(error.to_string())
@@ -80,7 +81,7 @@ fn py_test_path(py: Python<'_>, path: String, format: Option<&str>, threads: usi
     py.detach(move || {
         let source = Source::open(&path)?;
         let stream_format = options.format.detect_path(Path::new(&path), source.as_slice())?;
-        let mut output = fbz::WriterSink::new(std::io::sink());
+        let mut output = fbz::WriterSink::new(io::sink());
         fbz::decode_stream_to_sink_with_progress(stream_format, source.as_slice(), &mut output, options, |_| {})
     }).map_err(python_error)
 }
@@ -89,7 +90,7 @@ fn py_test_path(py: Python<'_>, path: String, format: Option<&str>, threads: usi
 fn py_test_bytes(py: Python<'_>, data: &[u8], format: Option<&str>, threads: usize, memory_limit: usize) -> PyResult<()> {
     let options = decode_options(format, threads, memory_limit)?;
     let data = data.to_vec();
-    py.detach(move || fbz::decompress_to_writer(&data, &mut std::io::sink(), options)).map_err(python_error)
+    py.detach(move || fbz::decompress_to_writer(&data, &mut io::sink(), options)).map_err(python_error)
 }
 
 #[pyclass(name = "_Reader")]
@@ -108,13 +109,13 @@ impl PyReader {
 
     fn read(&self, py: Python<'_>, size: i64) -> PyResult<Py<PyBytes>> {
         let output = py.detach(|| {
-            let mut reader = self.inner.lock().map_err(|_| std::io::Error::other("reader lock poisoned"))?;
+            let mut reader = self.inner.lock().map_err(|_| io::Error::other("reader lock poisoned"))?;
             if size < 0 {
                 let mut output = Vec::new();
                 reader.read_to_end(&mut output)?;
                 Ok(output)
             } else {
-                let count = usize::try_from(size).map_err(|_| std::io::Error::new(ErrorKind::InvalidInput, "requested read does not fit this platform"))?;
+                let count = usize::try_from(size).map_err(|_| io::Error::new(ErrorKind::InvalidInput, "requested read does not fit this platform"))?;
                 let mut output = vec![0; count];
                 let count = reader.read(&mut output)?;
                 output.truncate(count);
@@ -128,7 +129,7 @@ impl PyReader {
         if buffer.readonly() || !buffer.is_c_contiguous() { return Err(PyTypeError::new_err("readinto() requires a writable, contiguous byte buffer")); }
         let mut output = vec![0; buffer.item_count().min(PY_READINTO_CHUNK)];
         let count = py.detach(|| {
-            let mut reader = self.inner.lock().map_err(|_| std::io::Error::other("reader lock poisoned"))?;
+            let mut reader = self.inner.lock().map_err(|_| io::Error::other("reader lock poisoned"))?;
             reader.read(&mut output)
         }).map_err(python_read_error)?;
         // SAFETY: the live buffer export pins writable, contiguous storage, and count fits both allocations.
@@ -188,8 +189,8 @@ impl PyIndexedReader {
             let mut reader = self.inner.lock().map_err(|_| Error::InvalidConfiguration("reader lock poisoned".into()))?;
             let position = match whence {
                 0 if offset >= 0 => SeekFrom::Start(offset as u64),
-                0 => return Err(Error::Io(std::io::Error::new(ErrorKind::InvalidInput, "negative absolute seek"))), 1 => SeekFrom::Current(offset),
-                2 => SeekFrom::End(offset), _ => return Err(Error::Io(std::io::Error::new(ErrorKind::InvalidInput, "invalid whence")))
+                0 => return Err(Error::Io(io::Error::new(ErrorKind::InvalidInput, "negative absolute seek"))), 1 => SeekFrom::Current(offset),
+                2 => SeekFrom::End(offset), _ => return Err(Error::Io(io::Error::new(ErrorKind::InvalidInput, "invalid whence")))
             };
             reader.seek(position).map_err(Error::from)
         }).map_err(python_error)

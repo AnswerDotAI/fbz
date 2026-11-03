@@ -1,3 +1,4 @@
+use std::hint;
 #[cfg(not(debug_assertions))]
 #[path = "common/benchmark.rs"]
 mod benchmark;
@@ -83,8 +84,8 @@ fn assert_performance(plain: &[u8], limit: f64) {
     let encoded = compress(plain);
     assert_eq!(gzip::decompress(&encoded).unwrap(), oracle_decompress(&encoded));
     let repeats = 2;
-    let fbz_time = benchmark::elapsed(repeats, || { std::hint::black_box(gzip::decompress(&encoded).unwrap()); });
-    let oracle_time = benchmark::elapsed(repeats, || { std::hint::black_box(oracle_decompress(&encoded)); });
+    let fbz_time = benchmark::elapsed(repeats, || { hint::black_box(gzip::decompress(&encoded).unwrap()); });
+    let oracle_time = benchmark::elapsed(repeats, || { hint::black_box(oracle_decompress(&encoded)); });
     assert!(fbz_time.as_secs_f64() <= oracle_time.as_secs_f64() * limit, "fbz gzip {fbz_time:?} exceeded {limit}x oracle {oracle_time:?}");
 }
 

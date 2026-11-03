@@ -1,5 +1,6 @@
 //! LZ4 frame and block compression/decompression implemented in safe Rust.
 
+use std::io;
 use std::io::ErrorKind;
 use std::{hash::Hasher, io::Write};
 
@@ -48,7 +49,7 @@ struct FrameHeader {
 fn invalid(message: impl Into<String>) -> Error { Error::InvalidLz4(message.into()) }
 
 fn check_output(output: &impl OutputSink) -> Result<()> {
-    if output.is_cancelled() { Err(Error::Io(std::io::Error::new(ErrorKind::BrokenPipe, "output reader stopped reading"))) } else { Ok(()) }
+    if output.is_cancelled() { Err(Error::Io(io::Error::new(ErrorKind::BrokenPipe, "output reader stopped reading"))) } else { Ok(()) }
 }
 
 fn worker_threads(options: DecodeOptions) -> usize {

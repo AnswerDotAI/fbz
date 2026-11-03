@@ -1,3 +1,4 @@
+use std::io;
 mod support;
 
 use std::io::Write;
@@ -15,10 +16,10 @@ fn gzip_encoder_roundtrips_with_fbz_and_flate2() {
         assert_eq!(gzip::decompress(&encoded).unwrap(), input);
 
         let mut decoded = Vec::new();
-        std::io::copy(&mut GzDecoder::new(&encoded[..]), &mut decoded).unwrap();
+        io::copy(&mut GzDecoder::new(&encoded[..]), &mut decoded).unwrap();
         assert_eq!(decoded, input);
 
-        let report = gzip::decompress_to_writer(&encoded, &mut std::io::sink()).unwrap();
+        let report = gzip::decompress_to_writer(&encoded, &mut io::sink()).unwrap();
         assert_eq!(report.members.len(), 1);
     }
 }

@@ -1,4 +1,4 @@
-use std::{cmp::Reverse, collections::BinaryHeap, io::{self, Read, Write}};
+use std::{cmp::Reverse, collections::BinaryHeap, io::{self, Read, Write}, mem};
 
 use crc32fast::Hasher;
 
@@ -371,7 +371,7 @@ impl<W: Write> Encoder<W> {
         let mut next = Vec::with_capacity(self.segment_size + WINDOW_SIZE);
         let keep = self.buffer.len().min(WINDOW_SIZE);
         next.extend_from_slice(&self.buffer[self.buffer.len() - keep..]);
-        let buffer = std::mem::replace(&mut self.buffer, next);
+        let buffer = mem::replace(&mut self.buffer, next);
         let prefix_len = self.prefix_len;
         let level = self.options.level.unwrap();
         self.prefix_len = keep;

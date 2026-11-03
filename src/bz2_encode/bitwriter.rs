@@ -2,6 +2,7 @@
 //!
 //! Sans-io by construction: everything lands in a `Vec<u8>` the caller owns.
 
+use std::mem;
 use std::vec::Vec;
 
 /// Accumulates bits most-significant-first into a byte buffer.
@@ -43,7 +44,7 @@ impl BitWriter {
     ///
     /// This is what keeps a streaming writer's memory bounded: output can be
     /// handed off as it is produced instead of accumulating until `finish`.
-    pub fn drain(&mut self) -> Vec<u8> { std::mem::take(&mut self.out) }
+    pub fn drain(&mut self) -> Vec<u8> { mem::take(&mut self.out) }
 
     /// Append an exact MSB-first bit buffer whose final byte may be padded.
     pub fn write_buffer(&mut self, bytes: &[u8], bit_len: usize) {

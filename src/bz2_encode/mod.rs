@@ -4,6 +4,7 @@
 //! crabz2 0.4.0 by John Murray under the MIT license included in this folder.
 
 use rle1::Splitter;
+use std::mem;
 mod bitwriter;
 mod bwt;
 mod huffman;
@@ -116,9 +117,9 @@ impl<W: Write> Encoder<W> {
     fn submit_block(&mut self) -> Result<()> {
         if self.block.is_empty() { return Ok(()); }
         while !self.pipeline.can_submit(self.reservation) { self.commit_next()?; }
-        let rle = std::mem::replace(&mut self.block, Vec::with_capacity(self.block_limit));
-        let crc = std::mem::replace(&mut self.block_crc, Bz2Crc::new()).finish();
-        let input_len = std::mem::take(&mut self.block_input_len);
+        let rle = mem::replace(&mut self.block, Vec::with_capacity(self.block_limit));
+        let crc = mem::replace(&mut self.block_crc, Bz2Crc::new()).finish();
+        let input_len = mem::take(&mut self.block_input_len);
         self.pipeline.submit(self.reservation, move || encode_block(BlockJob { rle, crc, input_len }))
     }
 
@@ -136,7 +137,7 @@ impl<W: Write> Encoder<W> {
         while self.pipeline.has_pending() { self.commit_next()?; }
         self.bits.write_magic(EOS_MAGIC);
         self.bits.write_u32(self.combined_crc);
-        let trailing = std::mem::take(&mut self.bits).finish();
+        let trailing = mem::take(&mut self.bits).finish();
         self.output.as_mut().unwrap().write_all(&trailing)?;
         self.output.as_mut().unwrap().flush()?;
         self.output_len += trailing.len() as u64;

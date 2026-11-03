@@ -1,4 +1,5 @@
 use io::ErrorKind;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::{fs, io::{self, Write}, process::Command, time::{Duration, Instant}};
 use tar::{Builder, Header};
@@ -10,7 +11,7 @@ use flate2::{Compression, write::GzEncoder};
 mod support;
 use support::simplewiki_prefix;
 
-fn requested_threads() -> usize { std::env::var("FBZ_THREADS").ok().map(|value| value.parse().expect("FBZ_THREADS must be an integer")).unwrap_or(0) }
+fn requested_threads() -> usize { env::var("FBZ_THREADS").ok().map(|value| value.parse().expect("FBZ_THREADS must be an integer")).unwrap_or(0) }
 
 fn binary() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_fbz"));

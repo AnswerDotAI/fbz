@@ -2,6 +2,7 @@ use fbz::{EncodeFormat, Result};
 use fs::File;
 use io::ErrorKind;
 use lz4::BlockMode;
+use std::env;
 #[path = "fbz/archive_create.rs"]
 mod archive_create;
 #[path = "fbz/archive_extract.rs"]
@@ -173,7 +174,7 @@ struct IndexArgs {
 // Find the first positional without mistaking an option value for a command.
 // Clap's schema is the source of truth for both aliases and value-taking options.
 fn cli_args() -> Vec<std::ffi::OsString> {
-    let mut args: Vec<_> = std::env::args_os().collect();
+    let mut args: Vec<_> = env::args_os().collect();
     let mut schema = Cli::command();
     schema.build();
     let flags: Vec<_> = schema.get_arguments().chain(schema.get_subcommands().flat_map(|cmd| cmd.get_arguments())).collect();

@@ -1,3 +1,4 @@
+use std::io;
 mod support;
 
 use std::io::{Read, Write};
@@ -18,7 +19,7 @@ fn lz4_encoder_roundtrips_with_fbz_and_lz4_flex() {
         FrameDecoder::new(&encoded[..]).read_to_end(&mut decoded).unwrap();
         assert_eq!(decoded, input);
 
-        let report = lz4::decompress_to_writer(&encoded, &mut std::io::sink()).unwrap();
+        let report = lz4::decompress_to_writer(&encoded, &mut io::sink()).unwrap();
         assert_eq!(report.frames.len(), 1);
         assert_eq!(report.frames[0].block_mode, lz4::BlockMode::Independent);
         assert!(report.frames[0].content_checksum);

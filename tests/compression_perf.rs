@@ -1,3 +1,4 @@
+use fbz::lz4;
 mod support;
 
 use std::{io::Write, time::Instant};
@@ -46,7 +47,7 @@ fn lz4_compression_comparison() {
     let options = EncodeOptions { threads: 0, memory_limit: 1024 * 1024 * 1024, level: Some(6) };
 
     let start = Instant::now();
-    let ours = fbz::lz4::compress(&input, options).unwrap();
+    let ours = lz4::compress(&input, options).unwrap();
     let ours_time = start.elapsed();
 
     let start = Instant::now();
@@ -67,7 +68,7 @@ fn lz4_compression_thread_sweep() {
     for threads in [1, 2, 4, 8, 12, 18] {
         let options = EncodeOptions { threads, memory_limit: 1024 * 1024 * 1024, level: None };
         let start = Instant::now();
-        let encoded = fbz::lz4::compress(&input, options).unwrap();
+        let encoded = lz4::compress(&input, options).unwrap();
         eprintln!("LZ4 compression {threads:>2} workers: {:.3?}, {} bytes", start.elapsed(), encoded.len());
     }
 }

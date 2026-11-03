@@ -1,3 +1,4 @@
+use std::hint;
 #[cfg(not(debug_assertions))]
 #[path = "common/benchmark.rs"]
 mod benchmark;
@@ -106,8 +107,8 @@ fn performance_regression_stays_bounded() {
     let encoded = compress(&plain, Level::FASTEST);
     let repeats = 3;
     let fbz_time = benchmark::elapsed(repeats, || {
-        std::hint::black_box(decompress(&encoded, DecodeOptions { threads: 2, ..DecodeOptions::default() }).unwrap());
+        hint::black_box(decompress(&encoded, DecodeOptions { threads: 2, ..DecodeOptions::default() }).unwrap());
     });
-    let oracle_time = benchmark::elapsed(repeats, || { std::hint::black_box(oracle_decompress(&encoded).unwrap()); });
+    let oracle_time = benchmark::elapsed(repeats, || { hint::black_box(oracle_decompress(&encoded).unwrap()); });
     assert!(fbz_time.as_secs_f64() <= oracle_time.as_secs_f64() * 1.3, "fbz {fbz_time:?} exceeded 1.3x oracle {oracle_time:?}");
 }

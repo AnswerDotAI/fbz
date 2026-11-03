@@ -1,4 +1,5 @@
 use common::ProcessMetrics;
+use std::env;
 use std::path::PathBuf;
 mod common;
 
@@ -22,7 +23,7 @@ impl Write for CountingSink {
 
 fn corpus_path(name: &str) -> PathBuf { Path::new(env!("CARGO_MANIFEST_DIR")).join("meta").join(name) }
 
-fn requested_threads() -> usize { std::env::var("FBZ_THREADS").ok().map(|value| value.parse().expect("FBZ_THREADS must be an integer")).unwrap_or(0) }
+fn requested_threads() -> usize { env::var("FBZ_THREADS").ok().map(|value| value.parse().expect("FBZ_THREADS must be an integer")).unwrap_or(0) }
 
 fn physical_footprint_mib(metrics: &ProcessMetrics) -> f64 { metrics.peak_phys_footprint_bytes.map_or(f64::NAN, |bytes| bytes as f64 / (1024.0 * 1024.0)) }
 
@@ -132,7 +133,7 @@ fn system_gzip_process_metrics() {
 
 fn rapidgzip_binary() -> PathBuf {
     let default = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../git/rapidgzip-rust/target/release/rapidgzip-rust");
-    std::env::var_os("RAPIDGZIP_BIN").map(Into::into).unwrap_or(default)
+    env::var_os("RAPIDGZIP_BIN").map(Into::into).unwrap_or(default)
 }
 
 #[test]

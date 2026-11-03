@@ -1,4 +1,4 @@
-use std::{fs, io::{Read, Write}, path::Path};
+use std::{fs, io, io::{Read, Write}, path::Path};
 
 use crabz2::{Level, compress};
 use fbz::{DecodeFormat, DecodeOptions, Error, Reader};
@@ -19,7 +19,7 @@ fn lz4(data: &[u8], mode: BlockMode) -> Vec<u8> {
     encoder.finish().unwrap()
 }
 
-fn read(path: &Path, options: DecodeOptions) -> std::io::Result<Vec<u8>> {
+fn read(path: &Path, options: DecodeOptions) -> io::Result<Vec<u8>> {
     let mut reader = Reader::open(path, options).unwrap();
     let mut output = Vec::new();
     reader.read_to_end(&mut output)?;

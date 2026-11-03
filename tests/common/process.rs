@@ -1,9 +1,9 @@
 use io::ErrorKind;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::{io, mem::MaybeUninit, os::unix::process::ExitStatusExt, process::{Command, ExitStatus}, time::{Duration, Instant}};
+use std::{io, mem::MaybeUninit, os::unix::process::ExitStatusExt, process::{Command, ExitStatus}, thread, time::{Duration, Instant}};
 
-struct FootprintSampler { stop: Arc<AtomicBool>, worker: std::thread::JoinHandle<Option<u64>> }
+struct FootprintSampler { stop: Arc<AtomicBool>, worker: thread::JoinHandle<Option<u64>> }
 
 #[cfg(target_os = "macos")]
 impl FootprintSampler {
@@ -12,11 +12,11 @@ impl FootprintSampler {
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = Arc::clone(&stop);
         let initial = physical_footprint(pid);
-        let worker = std::thread::spawn(move || {
+        let worker = thread::spawn(move || {
             let mut maximum = initial;
             while !worker_stop.load(Ordering::Relaxed) {
                 if let Some(value) = physical_footprint(pid) { maximum = Some(maximum.map_or(value, |previous: u64| previous.max(value))); }
-                std::thread::sleep(Duration::from_millis(50));
+                thread::sleep(Duration::from_millis(50));
             }
             maximum
         });
@@ -28,7 +28,7 @@ impl FootprintSampler {
 impl FootprintSampler {
     fn start(_pid: libc::pid_t) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
-        let worker = std::thread::spawn(|| None);
+        let worker = thread::spawn(|| None);
         Self { stop, worker }
     }
 }

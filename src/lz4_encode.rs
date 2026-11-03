@@ -1,4 +1,4 @@
-use std::{hash::Hasher as _, io::{self, Read, Write}};
+use std::{hash::Hasher as _, io::{self, Read, Write}, mem};
 
 use twox_hash::XxHash32;
 
@@ -161,7 +161,7 @@ impl<W: Write> Encoder<W> {
     fn submit_buffer(&mut self) -> Result<()> {
         if self.buffer.is_empty() { return Ok(()); }
         while !self.pipeline.can_submit(self.reservation) { self.commit_next()?; }
-        let input = std::mem::replace(&mut self.buffer, Vec::with_capacity(self.block_size));
+        let input = mem::replace(&mut self.buffer, Vec::with_capacity(self.block_size));
         let level = self.options.level.unwrap();
         self.pipeline.submit(self.reservation, move || encode_block(input, level))
     }

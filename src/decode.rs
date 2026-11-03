@@ -1,5 +1,5 @@
 use decoder::DecodedCandidate;
-use std::{io::Write, sync::Arc, thread};
+use std::{io, io::Write, mem, sync::Arc, thread};
 
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
@@ -76,7 +76,7 @@ pub fn decompress_to_sink_with_progress(
         let level = parse_header(data, 0)?;
         let (expected_crc, mut decoded) = decoder::decode_first_candidate(data)?;
         if decoded.block_len > usize::from(level) * 100_000 { return Err(Error::Decode { bit_offset: 32, source: DecodeError::BlockOverflow }); }
-        output.write_owned_from(std::mem::take(&mut decoded.output), 0)?;
+        output.write_owned_from(mem::take(&mut decoded.output), 0)?;
         Some(PrefetchedCandidate { bit_offset: 32, expected_crc, decoded })
     } else { None };
     decode_to_sink_impl_with_prefetched(data, output, options, &mut progress, prefetched).map(|_| ())
@@ -85,7 +85,7 @@ pub fn decompress_to_sink_with_progress(
 pub fn build_index(data: &[u8], options: DecodeOptions) -> Result<Index> { build_index_with_progress(data, options, |_| {}) }
 
 pub fn build_index_with_progress(data: &[u8], options: DecodeOptions, mut progress: impl FnMut(DecodeProgress)) -> Result<Index> {
-    let mut output = WriterSink::new(std::io::sink());
+    let mut output = WriterSink::new(io::sink());
     decode_to_sink_impl(data, &mut output, options, &mut progress)
 }
 
