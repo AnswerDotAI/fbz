@@ -1,3 +1,4 @@
+use io::ErrorKind;
 use std::{cmp, io::{self, Read, Write}, sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc::{Receiver, SyncSender, sync_channel}}};
 
 /// Receives decoded bytes and can take ownership of decoder chunks.
@@ -8,7 +9,7 @@ pub trait OutputSink {
     fn write_borrowed(&mut self, bytes: &[u8]) -> io::Result<()>;
 
     fn write_owned_from(&mut self, bytes: Vec<u8>, start: usize) -> io::Result<()> {
-        let suffix = bytes.get(start..).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "owned chunk start exceeds its length"))?;
+        let suffix = bytes.get(start..).ok_or_else(|| io::Error::new(ErrorKind::InvalidInput, "owned chunk start exceeds its length"))?;
         self.write_borrowed(suffix)
     }
 
@@ -47,9 +48,9 @@ pub struct PipeWriter { sender: SyncSender<Chunk>, cancelled: Arc<AtomicBool> }
 
 impl PipeWriter {
     fn send(&self, bytes: Vec<u8>, offset: usize) -> io::Result<()> {
-        let suffix = bytes.get(offset..).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "owned chunk start exceeds its length"))?;
+        let suffix = bytes.get(offset..).ok_or_else(|| io::Error::new(ErrorKind::InvalidInput, "owned chunk start exceeds its length"))?;
         if suffix.is_empty() { return Ok(()); }
-        self.sender.send(Chunk { bytes, offset }).map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "output reader stopped reading"))
+        self.sender.send(Chunk { bytes, offset }).map_err(|_| io::Error::new(ErrorKind::BrokenPipe, "output reader stopped reading"))
     }
 }
 

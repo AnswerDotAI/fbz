@@ -3,6 +3,7 @@
 //! The BWT, MTF/RLE2, and grouped-Huffman implementation is adapted from
 //! crabz2 0.4.0 by John Murray under the MIT license included in this folder.
 
+use rle1::Splitter;
 mod bitwriter;
 mod bwt;
 mod huffman;
@@ -69,7 +70,7 @@ fn reservation(block_limit: usize) -> usize { block_limit.saturating_mul(32) }
 
 pub struct Encoder<W: Write> {
     output: Option<W>, bits: BitWriter, pipeline: StreamingOrdered<EncodedBlock>, block_limit: usize, reservation: usize, block: Vec<u8>, block_crc: Bz2Crc,
-    block_input_len: usize, runs: rle1::Splitter, combined_crc: u32, input_len: u64, output_len: u64, blocks: u64
+    block_input_len: usize, runs: Splitter, combined_crc: u32, input_len: u64, output_len: u64, blocks: u64
 }
 
 impl<W: Write> Encoder<W> {
@@ -88,7 +89,7 @@ impl<W: Write> Encoder<W> {
         let workers = requested.min((options.memory_limit / reservation).max(1));
         let mut encoder = Self { output: Some(output), bits: BitWriter::new(),
             pipeline: StreamingOrdered::new(workers, options.memory_limit, "fbz-bzip2-encode")?, block_limit, reservation,
-            block: Vec::with_capacity(block_limit), block_crc: Bz2Crc::new(), block_input_len: 0, runs: rle1::Splitter::new(), combined_crc: 0, input_len: 0,
+            block: Vec::with_capacity(block_limit), block_crc: Bz2Crc::new(), block_input_len: 0, runs: Splitter::new(), combined_crc: 0, input_len: 0,
             output_len: 0, blocks: 0 };
         for byte in [b'B', b'Z', b'h', b'0' + level] { encoder.bits.write_u8(byte); }
         encoder.drain_bits()?;

@@ -1,9 +1,10 @@
+use io::ErrorKind;
 use std::{io::{self, Read}, path::Path, sync::mpsc::{Receiver, sync_channel}, thread::{self, JoinHandle}};
 
 use crate::{DecodeOptions, Error, Format, PipeReader, Result, Source, decode_stream_to_sink_with_progress, output_pipe};
 
 #[derive(Clone)]
-struct StoredError { kind: io::ErrorKind, message: String }
+struct StoredError { kind: ErrorKind, message: String }
 
 impl StoredError {
     fn new(error: io::Error) -> Self { Self { kind: error.kind(), message: error.to_string() } }
@@ -101,7 +102,7 @@ impl Drop for Reader {
 
 fn read_error(error: Error) -> io::Error {
     match error {
-        Error::Io(error) => error, Error::InvalidConfiguration(message) => io::Error::new(io::ErrorKind::InvalidInput, message),
-        error => io::Error::new(io::ErrorKind::InvalidData, error)
+        Error::Io(error) => error, Error::InvalidConfiguration(message) => io::Error::new(ErrorKind::InvalidInput, message),
+        error => io::Error::new(ErrorKind::InvalidData, error)
     }
 }

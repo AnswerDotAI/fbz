@@ -1,9 +1,10 @@
 use std::io::Write;
+use tar::Builder;
 
 use fbz::{Bzip2EncodeReport, Bzip2Encoder, EncodeOptions, Error, Result, gzip, lz4, zip::PathInput};
 
 fn append_inputs<W: Write>(inputs: &[PathInput], encoder: W) -> Result<W> {
-    let mut archive = tar::Builder::new(encoder);
+    let mut archive = Builder::new(encoder);
     archive.follow_symlinks(false);
     for input in inputs { archive.append_path_with_name(&input.source, &input.archive_path)?; }
     archive.into_inner().map_err(Error::from)

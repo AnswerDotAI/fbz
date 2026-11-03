@@ -1,3 +1,4 @@
+use mpsc::TryRecvError;
 use std::{collections::HashMap, panic::{AssertUnwindSafe, catch_unwind}, sync::{Arc, Condvar, Mutex, atomic::{AtomicBool, Ordering}, mpsc}, thread};
 
 use rayon::{ThreadPool, ThreadPoolBuilder};
@@ -194,8 +195,8 @@ pub(crate) fn run_staged_ordered<T, O, S, Q, R>(
                             if stage_result_sender.send((key, value)).is_err() { return; }
                             continue;
                         }
-                        Err(mpsc::TryRecvError::Disconnected) => return,
-                        Err(mpsc::TryRecvError::Empty) => {}
+                        Err(TryRecvError::Disconnected) => return,
+                        Err(TryRecvError::Empty) => {}
                     }
                     match budget.try_next(jobs) {
                         TryNext::Ready(index) => { if !execute_job(index, jobs, &budget, &primary_sender, &execute, &retained_size) { return; } }

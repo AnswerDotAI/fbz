@@ -1,32 +1,35 @@
+use fbz::{DecodeFormat, DecodeOptions, EncodeFormat, Error, IndexedReader, Reader, Source};
+use std::io::ErrorKind;
+use std::path::Path;
 use std::{io::{Read, Seek, SeekFrom}, sync::Mutex};
 
 use pyo3::{buffer::PyBuffer, create_exception, exceptions::{PyOSError, PyTypeError, PyValueError}, prelude::*, types::PyBytes};
 
 create_exception!(fbz, BadCompressedFile, PyOSError);
 
-fn decode_format(format: Option<&str>) -> PyResult<fbz::DecodeFormat> {
+fn decode_format(format: Option<&str>) -> PyResult<DecodeFormat> {
     match format {
-        None | Some("auto") => Ok(fbz::DecodeFormat::Auto), Some("bzip2") => Ok(fbz::DecodeFormat::Bzip2), Some("gzip") => Ok(fbz::DecodeFormat::Gzip),
-        Some("lz4") => Ok(fbz::DecodeFormat::Lz4), Some(_) => Err(PyValueError::new_err("format must be 'bzip2', 'gzip', 'lz4', or None"))
+        None | Some("auto") => Ok(DecodeFormat::Auto), Some("bzip2") => Ok(DecodeFormat::Bzip2), Some("gzip") => Ok(DecodeFormat::Gzip),
+        Some("lz4") => Ok(DecodeFormat::Lz4), Some(_) => Err(PyValueError::new_err("format must be 'bzip2', 'gzip', 'lz4', or None"))
     }
 }
 
-fn decode_options(format: Option<&str>, threads: usize, memory_limit: usize) -> PyResult<fbz::DecodeOptions> {
-    Ok(fbz::DecodeOptions { format: decode_format(format)?, threads, memory_limit })
+fn decode_options(format: Option<&str>, threads: usize, memory_limit: usize) -> PyResult<DecodeOptions> {
+    Ok(DecodeOptions { format: decode_format(format)?, threads, memory_limit })
 }
 
-fn python_error(error: fbz::Error) -> PyErr {
+fn python_error(error: Error) -> PyErr {
     match error {
-        fbz::Error::Io(source) => PyOSError::new_err(source.to_string()),
-        fbz::Error::InvalidConfiguration(message) | fbz::Error::InvalidIndex(message) => PyValueError::new_err(message),
+        Error::Io(source) => PyOSError::new_err(source.to_string()),
+        Error::InvalidConfiguration(message) | Error::InvalidIndex(message) => PyValueError::new_err(message),
         error => BadCompressedFile::new_err(error.to_string()),
     }
 }
 
 fn python_read_error(error: std::io::Error) -> PyErr {
     match error.kind() {
-        std::io::ErrorKind::InvalidData => BadCompressedFile::new_err(error.to_string()),
-        std::io::ErrorKind::InvalidInput => PyValueError::new_err(error.to_string()), _ => PyOSError::new_err(error.to_string())
+        ErrorKind::InvalidData => BadCompressedFile::new_err(error.to_string()), ErrorKind::InvalidInput => PyValueError::new_err(error.to_string()),
+        _ => PyOSError::new_err(error.to_string())
     }
 }
 
@@ -54,7 +57,7 @@ fn py_decompress(py: Python<'_>, data: &[u8], format: Option<&str>, threads: usi
 #[pyfunction(name = "_compress", signature = (data, format, threads=0, memory_limit=fbz::DEFAULT_MEMORY_LIMIT, level=None))]
 fn py_compress(py: Python<'_>, data: &[u8], format: &str, threads: usize, memory_limit: usize, level: Option<u8>) -> PyResult<Py<PyBytes>> {
     let format = match format {
-        "bzip2" => fbz::EncodeFormat::Bzip2, "gzip" => fbz::EncodeFormat::Gzip, "lz4" => fbz::EncodeFormat::Lz4,
+        "bzip2" => EncodeFormat::Bzip2, "gzip" => EncodeFormat::Gzip, "lz4" => EncodeFormat::Lz4,
         _ => return Err(PyValueError::new_err("format must be 'bzip2', 'gzip', or 'lz4'"))
     };
     let data = data.to_vec();
@@ -65,8 +68,8 @@ fn py_compress(py: Python<'_>, data: &[u8], format: &str, threads: usize, memory
 #[pyfunction(name = "_build_index", signature = (path, threads=0, memory_limit=fbz::DEFAULT_MEMORY_LIMIT))]
 fn py_build_index(py: Python<'_>, path: String, threads: usize, memory_limit: usize) -> PyResult<Py<PyBytes>> {
     let encoded = py.detach(move || {
-        let source = fbz::Source::open(path)?;
-        Ok::<_, fbz::Error>(fbz::build_index(source.as_slice(), fbz::DecodeOptions { threads, memory_limit, ..fbz::DecodeOptions::default() })?.to_bytes())
+        let source = Source::open(path)?;
+        Ok::<_, Error>(fbz::build_index(source.as_slice(), DecodeOptions { threads, memory_limit, ..DecodeOptions::default() })?.to_bytes())
     }).map_err(python_error)?;
     Ok(PyBytes::new(py, &encoded).unbind())
 }
@@ -75,8 +78,8 @@ fn py_build_index(py: Python<'_>, path: String, threads: usize, memory_limit: us
 fn py_test_path(py: Python<'_>, path: String, format: Option<&str>, threads: usize, memory_limit: usize) -> PyResult<()> {
     let options = decode_options(format, threads, memory_limit)?;
     py.detach(move || {
-        let source = fbz::Source::open(&path)?;
-        let stream_format = options.format.detect_path(std::path::Path::new(&path), source.as_slice())?;
+        let source = Source::open(&path)?;
+        let stream_format = options.format.detect_path(Path::new(&path), source.as_slice())?;
         let mut output = fbz::WriterSink::new(std::io::sink());
         fbz::decode_stream_to_sink_with_progress(stream_format, source.as_slice(), &mut output, options, |_| {})
     }).map_err(python_error)
@@ -90,7 +93,7 @@ fn py_test_bytes(py: Python<'_>, data: &[u8], format: Option<&str>, threads: usi
 }
 
 #[pyclass(name = "_Reader")]
-struct PyReader { inner: Mutex<fbz::Reader> }
+struct PyReader { inner: Mutex<Reader> }
 
 const PY_READINTO_CHUNK: usize = 1024 * 1024;
 
@@ -100,7 +103,7 @@ impl PyReader {
     #[pyo3(signature = (path, format=None, threads=0, memory_limit=fbz::DEFAULT_MEMORY_LIMIT))]
     fn from_path(path: String, format: Option<&str>, threads: usize, memory_limit: usize) -> PyResult<Self> {
         let options = decode_options(format, threads, memory_limit)?;
-        Ok(Self { inner: Mutex::new(fbz::Reader::open(path, options).map_err(python_error)?) })
+        Ok(Self { inner: Mutex::new(Reader::open(path, options).map_err(python_error)?) })
     }
 
     fn read(&self, py: Python<'_>, size: i64) -> PyResult<Py<PyBytes>> {
@@ -111,8 +114,7 @@ impl PyReader {
                 reader.read_to_end(&mut output)?;
                 Ok(output)
             } else {
-                let count = usize::try_from(size)
-                    .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "requested read does not fit this platform"))?;
+                let count = usize::try_from(size).map_err(|_| std::io::Error::new(ErrorKind::InvalidInput, "requested read does not fit this platform"))?;
                 let mut output = vec![0; count];
                 let count = reader.read(&mut output)?;
                 output.truncate(count);
@@ -139,7 +141,7 @@ impl PyReader {
 }
 
 #[pyclass(name = "_IndexedReader")]
-struct PyIndexedReader { inner: Mutex<fbz::IndexedReader> }
+struct PyIndexedReader { inner: Mutex<IndexedReader> }
 
 #[pymethods]
 impl PyIndexedReader {
@@ -147,8 +149,8 @@ impl PyIndexedReader {
     #[pyo3(signature = (path, threads=0, memory_limit=fbz::DEFAULT_MEMORY_LIMIT, index_path=None, cache_limit=fbz::DEFAULT_CACHE_LIMIT))]
     fn from_path(py: Python<'_>, path: String, threads: usize, memory_limit: usize, index_path: Option<String>, cache_limit: usize) -> PyResult<Self> {
         let inner = py.detach(move || match index_path {
-            Some(index_path) => fbz::IndexedReader::open_with_index(path, index_path, cache_limit), None => fbz::IndexedReader::from_source(
-                fbz::Source::open(path)?, None, fbz::DecodeOptions { threads, memory_limit, ..fbz::DecodeOptions::default() }, cache_limit)
+            Some(index_path) => IndexedReader::open_with_index(path, index_path, cache_limit),
+            None => IndexedReader::from_source(Source::open(path)?, None, DecodeOptions { threads, memory_limit, ..DecodeOptions::default() }, cache_limit),
         }).map_err(python_error)?;
         Ok(Self { inner: Mutex::new(inner) })
     }
@@ -159,21 +161,23 @@ impl PyIndexedReader {
         let data = data.to_vec();
         let index = index.map(<[u8]>::to_vec);
         let inner = py.detach(move || match index {
-            Some(index) => fbz::IndexedReader::from_bytes_with_index(data, &index, cache_limit), None => fbz::IndexedReader::from_source(
-                fbz::Source::from_bytes(data), None, fbz::DecodeOptions { threads, memory_limit, ..fbz::DecodeOptions::default() }, cache_limit)
+            Some(index) => IndexedReader::from_bytes_with_index(data, &index, cache_limit),
+            None => {
+                IndexedReader::from_source(Source::from_bytes(data), None, DecodeOptions { threads, memory_limit, ..DecodeOptions::default() }, cache_limit)
+            }
         }).map_err(python_error)?;
         Ok(Self { inner: Mutex::new(inner) })
     }
 
     fn read(&self, py: Python<'_>, size: i64) -> PyResult<Py<PyBytes>> {
         let output = py.detach(|| {
-            let mut reader = self.inner.lock().map_err(|_| fbz::Error::InvalidConfiguration("reader lock poisoned".into()))?;
+            let mut reader = self.inner.lock().map_err(|_| Error::InvalidConfiguration("reader lock poisoned".into()))?;
             let remaining = reader.size() - reader.position();
             let count = if size < 0 { remaining } else { remaining.min(size as u64) };
-            let count = usize::try_from(count).map_err(|_| fbz::Error::InvalidConfiguration("requested read does not fit this platform".into()))?;
+            let count = usize::try_from(count).map_err(|_| Error::InvalidConfiguration("requested read does not fit this platform".into()))?;
             let mut output = vec![0; count];
             reader.read_exact(&mut output)?;
-            Ok::<_, fbz::Error>(output)
+            Ok::<_, Error>(output)
         }).map_err(python_error)?;
         Ok(PyBytes::new(py, &output).unbind())
     }
@@ -181,14 +185,13 @@ impl PyIndexedReader {
     #[pyo3(signature = (offset, whence=0))]
     fn seek(&self, py: Python<'_>, offset: i64, whence: i32) -> PyResult<u64> {
         py.detach(|| {
-            let mut reader = self.inner.lock().map_err(|_| fbz::Error::InvalidConfiguration("reader lock poisoned".into()))?;
+            let mut reader = self.inner.lock().map_err(|_| Error::InvalidConfiguration("reader lock poisoned".into()))?;
             let position = match whence {
                 0 if offset >= 0 => SeekFrom::Start(offset as u64),
-                0 => return Err(fbz::Error::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, "negative absolute seek"))),
-                1 => SeekFrom::Current(offset), 2 => SeekFrom::End(offset),
-                _ => return Err(fbz::Error::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid whence")))
+                0 => return Err(Error::Io(std::io::Error::new(ErrorKind::InvalidInput, "negative absolute seek"))), 1 => SeekFrom::Current(offset),
+                2 => SeekFrom::End(offset), _ => return Err(Error::Io(std::io::Error::new(ErrorKind::InvalidInput, "invalid whence")))
             };
-            reader.seek(position).map_err(fbz::Error::from)
+            reader.seek(position).map_err(Error::from)
         }).map_err(python_error)
     }
 

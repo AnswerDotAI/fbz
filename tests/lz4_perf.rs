@@ -1,3 +1,4 @@
+use std::path::Path;
 #[allow(dead_code, unused_imports)]
 mod common;
 mod support;
@@ -27,15 +28,15 @@ impl Fixture {
     }
 }
 
-fn fbz_command(input: &std::path::Path) -> Command { fbz_command_with_threads(input, requested_threads()) }
+fn fbz_command(input: &Path) -> Command { fbz_command_with_threads(input, requested_threads()) }
 
-fn fbz_command_with_threads(input: &std::path::Path, threads: usize) -> Command {
+fn fbz_command_with_threads(input: &Path, threads: usize) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_fbz"));
     command.args(["test", "-q", "-P", &threads.to_string()]).arg(input);
     command
 }
 
-fn lz4_command(input: &std::path::Path) -> Command {
+fn lz4_command(input: &Path) -> Command {
     let mut command = Command::new("lz4");
     command.args(["-t", "-q"]).arg(input);
     command

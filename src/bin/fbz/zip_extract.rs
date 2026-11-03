@@ -1,3 +1,6 @@
+use fs::File;
+use io::ErrorKind;
+use std::sync::PoisonError;
 use std::{
     collections::HashMap, fs, io::{self, Cursor}, path::{Component, Path, PathBuf}, sync::{
         Mutex, atomic::{AtomicU64, AtomicUsize, Ordering}
@@ -117,7 +120,7 @@ impl<W> ExpectedOutput<W> {
 
     fn check(&self, count: usize) -> io::Result<()> {
         if self.written.saturating_add(count as u64) > self.expected {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, format!("ZIP entry exceeds its declared {}-byte size", self.expected)));
+            return Err(io::Error::new(ErrorKind::InvalidData, format!("ZIP entry exceeds its declared {}-byte size", self.expected)));
         }
         Ok(())
     }
@@ -132,7 +135,7 @@ impl<W: OutputSink> OutputSink for ExpectedOutput<W> {
     }
 
     fn write_owned_from(&mut self, bytes: Vec<u8>, start: usize) -> io::Result<()> {
-        let count = bytes.get(start..).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "owned chunk start exceeds its length"))?.len();
+        let count = bytes.get(start..).ok_or_else(|| io::Error::new(ErrorKind::InvalidInput, "owned chunk start exceeds its length"))?.len();
         self.check(count)?;
         self.inner.write_owned_from(bytes, start)?;
         self.written += count as u64;
@@ -200,7 +203,7 @@ fn run_entries<P>(
             entry_decoded = entry_progress.decoded_bytes;
             let compressed_bytes = compressed.fetch_add(compressed_delta, Ordering::Relaxed) + compressed_delta;
             let decoded_bytes = decoded.fetch_add(decoded_delta, Ordering::Relaxed) + decoded_delta;
-            progress.lock().unwrap_or_else(std::sync::PoisonError::into_inner)(DecodeProgress { compressed_bytes, decoded_bytes });
+            progress.lock().unwrap_or_else(PoisonError::into_inner)(DecodeProgress { compressed_bytes, decoded_bytes });
         };
         run(entry, entry_options, &mut update)?;
         let compressed_delta = entry.compressed_size.saturating_sub(entry_compressed);
@@ -209,7 +212,7 @@ fn run_entries<P>(
         let decoded = decoded.fetch_add(decoded_delta, Ordering::Relaxed) + decoded_delta;
         let completed = completed.fetch_add(1, Ordering::Relaxed) + 1;
         let compressed_bytes = if completed == entries.len() { source_len } else { compressed };
-        progress.lock().unwrap_or_else(std::sync::PoisonError::into_inner)(DecodeProgress { compressed_bytes, decoded_bytes: decoded });
+        progress.lock().unwrap_or_else(PoisonError::into_inner)(DecodeProgress { compressed_bytes, decoded_bytes: decoded });
         Ok(())
     };
     let (within, across): (Vec<_>, Vec<_>) = entries.iter().partition(|entry| uses_intra_entry(entry, entries.len()));
@@ -282,7 +285,7 @@ fn extract_entry(data: &[u8], root: &Path, entry: &Entry, options: DecodeOptions
 }
 
 fn set_modified(path: &Path, modified: Option<SystemTime>) -> Result<()> {
-    if let Some(modified) = modified { fs::File::open(path)?.set_times(fs::FileTimes::new().set_modified(modified))?; }
+    if let Some(modified) = modified { File::open(path)?.set_times(fs::FileTimes::new().set_modified(modified))?; }
     Ok(())
 }
 

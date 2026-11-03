@@ -1,6 +1,9 @@
+use io::ErrorKind;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::{io, mem::MaybeUninit, os::unix::process::ExitStatusExt, process::{Command, ExitStatus}, time::{Duration, Instant}};
 
-struct FootprintSampler { stop: std::sync::Arc<std::sync::atomic::AtomicBool>, worker: std::thread::JoinHandle<Option<u64>> }
+struct FootprintSampler { stop: Arc<AtomicBool>, worker: std::thread::JoinHandle<Option<u64>> }
 
 #[cfg(target_os = "macos")]
 impl FootprintSampler {
@@ -24,7 +27,7 @@ impl FootprintSampler {
 #[cfg(not(target_os = "macos"))]
 impl FootprintSampler {
     fn start(_pid: libc::pid_t) -> Self {
-        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stop = Arc::new(AtomicBool::new(false));
         let worker = std::thread::spawn(|| None);
         Self { stop, worker }
     }
@@ -71,7 +74,7 @@ pub fn measure(command: &mut Command) -> io::Result<ProcessMetrics> {
         let result = unsafe { libc::wait4(pid, &mut status, 0, usage.as_mut_ptr()) };
         if result >= 0 { break; }
         let error = io::Error::last_os_error();
-        if error.kind() != io::ErrorKind::Interrupted { return Err(error); }
+        if error.kind() != ErrorKind::Interrupted { return Err(error); }
     }
     // SAFETY: a successful `wait4` initialized the complete `rusage` value.
     let usage = unsafe { usage.assume_init() };

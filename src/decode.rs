@@ -1,3 +1,4 @@
+use decoder::DecodedCandidate;
 use std::{io::Write, sync::Arc, thread};
 
 use rayon::{ThreadPool, ThreadPoolBuilder};
@@ -104,7 +105,7 @@ fn decode_to_sink_impl(data: &[u8], output: &mut impl OutputSink, options: Decod
     decode_to_sink_impl_with_prefetched(data, output, options, progress, None)
 }
 
-struct PrefetchedCandidate { bit_offset: u64, expected_crc: u32, decoded: decoder::DecodedCandidate }
+struct PrefetchedCandidate { bit_offset: u64, expected_crc: u32, decoded: DecodedCandidate }
 
 fn decode_to_sink_impl_with_prefetched(
     data: &[u8], output: &mut impl OutputSink, options: DecodeOptions, progress: &mut impl FnMut(DecodeProgress), prefetched: Option<PrefetchedCandidate>
@@ -201,14 +202,14 @@ fn assemble(
 }
 
 trait Candidates {
-    fn take(&mut self, marker_index: usize) -> Result<decoder::DecodedCandidate>;
+    fn take(&mut self, marker_index: usize) -> Result<DecodedCandidate>;
     fn discard_before(&mut self, marker_index: usize);
 }
 
 struct SerialCandidates<'a> { data: &'a [u8], markers: &'a [Marker] }
 
 impl Candidates for SerialCandidates<'_> {
-    fn take(&mut self, marker_index: usize) -> Result<decoder::DecodedCandidate> {
+    fn take(&mut self, marker_index: usize) -> Result<DecodedCandidate> {
         let Marker::Block(block) = &self.markers[marker_index] else { return Err(required_marker(self.markers[marker_index].bit_offset())) };
         decoder::decode_candidate(self.data, block.bit_offset, block.expected_crc)
     }
@@ -219,14 +220,14 @@ impl Candidates for SerialCandidates<'_> {
 #[derive(Clone, Copy)]
 struct CandidateJob { start_bit: u64, expected_crc: u32 }
 
-fn candidate_len(result: &Result<decoder::DecodedCandidate>) -> usize { result.as_ref().map_or(0, |decoded| decoded.output.len()) }
+fn candidate_len(result: &Result<DecodedCandidate>) -> usize { result.as_ref().map_or(0, |decoded| decoded.output.len()) }
 
 struct ParallelCandidates<'results, 'pipeline> {
-    results: &'results mut OrderedResults<'pipeline, Result<decoder::DecodedCandidate>>, prefetched: Option<(usize, decoder::DecodedCandidate)>
+    results: &'results mut OrderedResults<'pipeline, Result<DecodedCandidate>>, prefetched: Option<(usize, DecodedCandidate)>
 }
 
 impl Candidates for ParallelCandidates<'_, '_> {
-    fn take(&mut self, marker_index: usize) -> Result<decoder::DecodedCandidate> {
+    fn take(&mut self, marker_index: usize) -> Result<DecodedCandidate> {
         if self.prefetched.as_ref().is_some_and(|(prefetched_index, _)| *prefetched_index == marker_index) { return Ok(self.prefetched.take().unwrap().1); }
         self.results.take(marker_index)?
     }

@@ -1,3 +1,4 @@
+use std::path::Path;
 #[allow(dead_code, unused_imports)]
 mod common;
 
@@ -5,13 +6,13 @@ use std::{path::PathBuf, process::Command};
 
 fn fixture(extension: &str) -> PathBuf { PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("meta/simplewiki-first-5pct.xml.{extension}")) }
 
-fn fbz(input: &std::path::Path) -> Command {
+fn fbz(input: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_fbz"));
     command.args(["test", "-q", "-P", "0"]).arg(input);
     command
 }
 
-fn reference(program: &str, input: &std::path::Path) -> Command {
+fn reference(program: &str, input: &Path) -> Command {
     let mut command = Command::new(program);
     command.arg("-t").arg(input);
     command

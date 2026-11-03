@@ -1,5 +1,6 @@
 //! Gzip framing and DEFLATE compression/decompression implemented in safe Rust.
 
+use crc32fast::Hasher;
 use std::{io::Write, sync::OnceLock};
 
 use crate::{
@@ -251,7 +252,7 @@ impl DeflateOutput for MarkerOutput {
 }
 
 struct Segment {
-    start_bit: usize, end_bit: usize, marked: Vec<u16>, clean: Vec<u8>, clean_start: usize, clean_crc: crc32fast::Hasher, blocks: Vec<Block>, final_block: bool
+    start_bit: usize, end_bit: usize, marked: Vec<u16>, clean: Vec<u8>, clean_start: usize, clean_crc: Hasher, blocks: Vec<Block>, final_block: bool
 }
 
 impl Segment {
@@ -270,7 +271,7 @@ fn decode_segment(data: &[u8], start_bit: usize, stop_bit: usize, history: Initi
         if final_block { bits.align_byte(); break true; }
         if bits.position_bits() >= stop_bit && blocks.last().is_some_and(|block| block.kind == BlockKind::DynamicHuffman) { break false; }
     };
-    let mut clean_crc = crc32fast::Hasher::new();
+    let mut clean_crc = Hasher::new();
     clean_crc.update(&emitter.clean[emitter.clean_start..]);
     Ok(Segment { start_bit, end_bit: bits.position_bits(), marked: emitter.marked, clean: emitter.clean, clean_start: emitter.clean_start, clean_crc, blocks,
         final_block })
@@ -379,23 +380,23 @@ fn successor_window(segment: &Segment, predecessor: &[u8]) -> Result<Vec<u8>> {
 
 struct ResolveTask { segment: Segment, predecessor: Vec<u8> }
 
-struct ResolvedSegment { marked: Vec<u8>, clean: Vec<u8>, clean_start: usize, blocks: Vec<Block>, compressed_end_bit: usize, crc: crc32fast::Hasher }
+struct ResolvedSegment { marked: Vec<u8>, clean: Vec<u8>, clean_start: usize, blocks: Vec<Block>, compressed_end_bit: usize, crc: Hasher }
 
 fn resolve_segment(segment: Segment, predecessor: &[u8]) -> Result<ResolvedSegment> {
     let marked = resolve_symbols(&segment.marked, predecessor)?;
-    let mut crc = crc32fast::Hasher::new();
+    let mut crc = Hasher::new();
     crc.update(&marked);
     crc.combine(&segment.clean_crc);
     Ok(ResolvedSegment { marked, clean: segment.clean, clean_start: segment.clean_start, blocks: segment.blocks, compressed_end_bit: segment.end_bit, crc })
 }
 
 struct SegmentCommitter<'a, W: ?Sized, P: ?Sized> {
-    member: u32, decoded_base: u64, decoded: u64, output: &'a mut W, crc: crc32fast::Hasher, blocks: &'a mut Vec<Block>, progress: &'a mut P
+    member: u32, decoded_base: u64, decoded: u64, output: &'a mut W, crc: Hasher, blocks: &'a mut Vec<Block>, progress: &'a mut P
 }
 
 impl<'a, W: OutputSink + ?Sized, P: FnMut(DecodeProgress) + ?Sized> SegmentCommitter<'a, W, P> {
     fn new(member: u32, decoded_base: u64, output: &'a mut W, blocks: &'a mut Vec<Block>, progress: &'a mut P) -> Self {
-        Self { member, decoded_base, decoded: 0, output, crc: crc32fast::Hasher::new(), blocks, progress }
+        Self { member, decoded_base, decoded: 0, output, crc: Hasher::new(), blocks, progress }
     }
 
     fn commit(&mut self, segment: ResolvedSegment) -> Result<()> {
@@ -811,12 +812,11 @@ trait DeflateOutput {
     fn copy(&mut self, distance: usize, length: usize) -> Result<()>;
 }
 
-struct Emitter<'a, W> { output: &'a mut W, buffer: Vec<u8>, history_len: usize, crc: crc32fast::Hasher, member_decoded: u64, decoded_base: u64 }
+struct Emitter<'a, W> { output: &'a mut W, buffer: Vec<u8>, history_len: usize, crc: Hasher, member_decoded: u64, decoded_base: u64 }
 
 impl<'a, W: OutputSink> Emitter<'a, W> {
     fn new(output: &'a mut W, decoded_base: u64) -> Self {
-        Self { output, buffer: Vec::with_capacity(WINDOW_SIZE + OUTPUT_CHUNK + 258), history_len: 0, crc: crc32fast::Hasher::new(), member_decoded: 0,
-            decoded_base }
+        Self { output, buffer: Vec::with_capacity(WINDOW_SIZE + OUTPUT_CHUNK + 258), history_len: 0, crc: Hasher::new(), member_decoded: 0, decoded_base }
     }
 
     fn decoded_position(&self) -> u64 { self.decoded_base + self.member_decoded }

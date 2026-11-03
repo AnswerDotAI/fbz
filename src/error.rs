@@ -1,3 +1,4 @@
+use fmt::{Display, Formatter};
 use std::{error, fmt, io};
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -5,8 +6,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecodeError { InvalidMagic, InvalidLevel, Truncated, CrcMismatch, RandomizedBlock, InvalidHuffman, InvalidBlock, BlockOverflow }
 
-impl fmt::Display for DecodeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for DecodeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::InvalidMagic => "invalid bzip2 magic", Self::InvalidLevel => "invalid bzip2 block size", Self::Truncated => "unexpected end of bzip2 stream",
             Self::CrcMismatch => "bzip2 CRC mismatch", Self::RandomizedBlock => "legacy randomized bzip2 block not supported",
@@ -25,8 +26,8 @@ pub enum Error {
     Decode { bit_offset: u64, source: DecodeError }, InvalidIndex(String), InvalidConfiguration(String), Io(io::Error)
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidBitCount(count) => write!(f, "cannot read {count} bits at once; maximum is 64"),
             Self::InvalidBitOffset { bit_offset, len_bits } => { write!(f, "bit offset {bit_offset} is beyond the {len_bits}-bit input") }

@@ -1,3 +1,5 @@
+use common::ProcessMetrics;
+use std::path::PathBuf;
 mod common;
 
 use std::{ffi::OsStr, fs, io::{self, Write}, path::Path, process::{Command, Stdio}, time::{Duration, Instant}};
@@ -18,13 +20,11 @@ impl Write for CountingSink {
     fn flush(&mut self) -> io::Result<()> { Ok(()) }
 }
 
-fn corpus_path(name: &str) -> std::path::PathBuf { Path::new(env!("CARGO_MANIFEST_DIR")).join("meta").join(name) }
+fn corpus_path(name: &str) -> PathBuf { Path::new(env!("CARGO_MANIFEST_DIR")).join("meta").join(name) }
 
 fn requested_threads() -> usize { std::env::var("FBZ_THREADS").ok().map(|value| value.parse().expect("FBZ_THREADS must be an integer")).unwrap_or(0) }
 
-fn physical_footprint_mib(metrics: &common::ProcessMetrics) -> f64 {
-    metrics.peak_phys_footprint_bytes.map_or(f64::NAN, |bytes| bytes as f64 / (1024.0 * 1024.0))
-}
+fn physical_footprint_mib(metrics: &ProcessMetrics) -> f64 { metrics.peak_phys_footprint_bytes.map_or(f64::NAN, |bytes| bytes as f64 / (1024.0 * 1024.0)) }
 
 fn validation_command(binary: impl AsRef<OsStr>, path: &Path, threads: usize) -> Command {
     let mut command = Command::new(&binary);
@@ -47,7 +47,7 @@ fn timed_validation(binary: impl AsRef<OsStr>, path: &Path, threads: usize) -> c
     common::measure_timing(&mut quiet_validation_command(binary, path, threads)).unwrap()
 }
 
-fn print_process_metrics(label: &str, metrics: &common::ProcessMetrics) {
+fn print_process_metrics(label: &str, metrics: &ProcessMetrics) {
     eprintln!(
         "{label}: wall {:.3}s, CPU {:.3}s user + {:.3}s system, peak RSS {:.1} MiB, peak physical footprint {:.1} MiB", metrics.wall.as_secs_f64(),
         metrics.user.as_secs_f64(), metrics.system.as_secs_f64(), metrics.peak_rss_bytes as f64 / (1024.0 * 1024.0), physical_footprint_mib(metrics),
@@ -130,7 +130,7 @@ fn system_gzip_process_metrics() {
     print_process_metrics("system gzip", &metrics);
 }
 
-fn rapidgzip_binary() -> std::path::PathBuf {
+fn rapidgzip_binary() -> PathBuf {
     let default = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../git/rapidgzip-rust/target/release/rapidgzip-rust");
     std::env::var_os("RAPIDGZIP_BIN").map(Into::into).unwrap_or(default)
 }

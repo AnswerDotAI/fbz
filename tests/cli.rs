@@ -1,4 +1,6 @@
+use serde_json::Value;
 use std::{fs, io::{Cursor, Write}, path::Path, process::{Command, Stdio}, time::{Duration, UNIX_EPOCH}};
+use tar::{Builder, EntryType, Header};
 
 use crabz2::{Level, compress};
 use flate2::{Compression, write::GzEncoder};
@@ -49,9 +51,9 @@ fn streaming_zip64() -> Vec<u8> {
 fn tar_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
     let mut archive = Vec::new();
     {
-        let mut builder = tar::Builder::new(&mut archive);
+        let mut builder = Builder::new(&mut archive);
         for (path, contents) in entries {
-            let mut header = tar::Header::new_gnu();
+            let mut header = Header::new_gnu();
             header.set_size(contents.len() as u64);
             header.set_mode(0o640);
             header.set_mtime(1_700_000_123);
@@ -318,7 +320,7 @@ fn bzip2_compression_and_tar_composition_interoperate() {
 
 fn traversal_tar() -> Vec<u8> {
     let contents = b"must stay inside destination";
-    let mut header = tar::Header::new_gnu();
+    let mut header = Header::new_gnu();
     header.set_size(contents.len() as u64);
     header.set_mode(0o644);
     header.set_path("safe.txt").unwrap();
@@ -328,7 +330,7 @@ fn traversal_tar() -> Vec<u8> {
 
     let mut archive = Vec::new();
     {
-        let mut builder = tar::Builder::new(&mut archive);
+        let mut builder = Builder::new(&mut archive);
         builder.append(&header, contents.as_slice()).unwrap();
         builder.finish().unwrap();
     }
@@ -339,16 +341,16 @@ fn linked_tar() -> Vec<u8> {
     let contents = b"linked contents";
     let mut archive = Vec::new();
     {
-        let mut builder = tar::Builder::new(&mut archive);
-        let mut file = tar::Header::new_gnu();
+        let mut builder = Builder::new(&mut archive);
+        let mut file = Header::new_gnu();
         file.set_size(contents.len() as u64);
         file.set_mode(0o640);
         file.set_mtime(1_700_000_123);
         file.set_cksum();
         builder.append_data(&mut file, "root.txt", contents.as_slice()).unwrap();
 
-        for (path, entry_type) in [("symbolic.txt", tar::EntryType::Symlink), ("hard.txt", tar::EntryType::Link)] {
-            let mut link = tar::Header::new_gnu();
+        for (path, entry_type) in [("symbolic.txt", EntryType::Symlink), ("hard.txt", EntryType::Link)] {
+            let mut link = Header::new_gnu();
             link.set_path(path).unwrap();
             link.set_link_name("root.txt").unwrap();
             link.set_entry_type(entry_type);
@@ -417,7 +419,7 @@ fn commands_aliases_and_implicit_paths_are_unambiguous() {
     for command in ["l", "list"] {
         let output = binary().current_dir(directory.path()).args([command, "payload.gz", "--json"]).output().unwrap();
         assert!(output.status.success());
-        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap();
+        serde_json::from_slice::<Value>(&output.stdout).unwrap();
     }
     let output = binary().current_dir(directory.path()).args(["-C", "test", "payload.gz"]).output().unwrap();
     assert!(output.status.success());
@@ -581,7 +583,7 @@ fn list_json_describes_one_or_many_inputs() {
 
     let single = binary().args(["list", "--json", first.to_str().unwrap()]).output().unwrap();
     assert!(single.status.success());
-    let value: serde_json::Value = serde_json::from_slice(&single.stdout).unwrap();
+    let value: Value = serde_json::from_slice(&single.stdout).unwrap();
     assert_eq!(value["input"], first.to_str().unwrap());
     assert_eq!(value["decoded_bytes"], 5);
     assert_eq!(value["streams"].as_array().unwrap().len(), 1);
@@ -589,7 +591,7 @@ fn list_json_describes_one_or_many_inputs() {
 
     let multiple = binary().args(["list", "--json", first.to_str().unwrap(), second.to_str().unwrap()]).output().unwrap();
     assert!(multiple.status.success());
-    let value: serde_json::Value = serde_json::from_slice(&multiple.stdout).unwrap();
+    let value: Value = serde_json::from_slice(&multiple.stdout).unwrap();
     assert_eq!(value.as_array().unwrap().len(), 2);
 
     let limited = binary().args(["list", "--max-output", "4", first.to_str().unwrap()]).output().unwrap();
@@ -616,7 +618,7 @@ fn gzip_extension_selects_decoder_across_cli_modes() {
 
     let listed = binary().args(["list", "--json", input.to_str().unwrap()]).output().unwrap();
     assert!(listed.status.success());
-    let value: serde_json::Value = serde_json::from_slice(&listed.stdout).unwrap();
+    let value: Value = serde_json::from_slice(&listed.stdout).unwrap();
     assert_eq!(value["format"], "gzip");
     assert_eq!(value["decoded_bytes"], plain.len());
     assert_eq!(value["members"].as_array().unwrap().len(), 1);
@@ -677,7 +679,7 @@ fn lz4_extension_magic_reporting_limits_and_corruption_work() {
     assert!(tested.status.success());
     let listed = binary().args(["list", "--json", "-P", "4", input.to_str().unwrap()]).output().unwrap();
     assert!(listed.status.success());
-    let value: serde_json::Value = serde_json::from_slice(&listed.stdout).unwrap();
+    let value: Value = serde_json::from_slice(&listed.stdout).unwrap();
     assert_eq!(value["format"], "lz4");
     assert_eq!(value["decoded_bytes"], plain.len());
     assert_eq!(value["frames"][0]["block_mode"], "independent");
@@ -864,7 +866,7 @@ fn zip_auto_extracts_validates_lists_and_preserves_links() {
 
     let listed = binary().args(["list", "--json", input.to_str().unwrap()]).output().unwrap();
     assert!(listed.status.success(), "{}", String::from_utf8_lossy(&listed.stderr));
-    let listing: serde_json::Value = serde_json::from_slice(&listed.stdout).unwrap();
+    let listing: Value = serde_json::from_slice(&listed.stdout).unwrap();
     assert_eq!(listing["format"], "zip");
     assert_eq!(listing["entries"].as_array().unwrap().len(), 3);
 

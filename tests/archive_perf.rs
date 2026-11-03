@@ -1,4 +1,7 @@
+use io::ErrorKind;
+use std::path::{Path, PathBuf};
 use std::{fs, io::{self, Write}, process::Command, time::{Duration, Instant}};
+use tar::{Builder, Header};
 
 use crabz2::{Level, compress};
 use fbz::{DecodeOptions, OutputSink, gzip as gzip_decoder};
@@ -18,8 +21,8 @@ fn binary() -> Command {
 fn tar_bytes(contents: &[u8]) -> Vec<u8> {
     let mut archive = Vec::new();
     {
-        let mut builder = tar::Builder::new(&mut archive);
-        let mut header = tar::Header::new_gnu();
+        let mut builder = Builder::new(&mut archive);
+        let mut header = Header::new_gnu();
         header.set_size(contents.len() as u64);
         header.set_mode(0o644);
         header.set_cksum();
@@ -43,7 +46,7 @@ fn timed(action: impl FnOnce()) -> Duration {
 
 fn timed_command(command: &mut Command) -> Duration { timed(|| assert!(command.status().unwrap().success())) }
 
-struct Fixture { directory: tempfile::TempDir, contents: Vec<u8>, input: std::path::PathBuf }
+struct Fixture { directory: tempfile::TempDir, contents: Vec<u8>, input: PathBuf }
 
 fn fixture(extension: &str, encode: impl Fn(&[u8]) -> Vec<u8>) -> Fixture {
     let directory = tempfile::tempdir().unwrap();
@@ -92,7 +95,7 @@ fn tar_crate_reference() {
     let directory = tempfile::tempdir().unwrap();
     let contents = simplewiki_prefix();
     let archive = tar_bytes(&contents);
-    let unpack = |destination: &std::path::Path| {
+    let unpack = |destination: &Path| {
         fs::create_dir(destination).unwrap();
         tar::Archive::new(archive.as_slice()).unpack(destination).unwrap();
     };
@@ -122,7 +125,7 @@ impl OutputSink for CadenceSink {
     fn write_borrowed(&mut self, buffer: &[u8]) -> io::Result<()> { self.record(buffer.len()); Ok(()) }
 
     fn write_owned_from(&mut self, buffer: Vec<u8>, start: usize) -> io::Result<()> {
-        let bytes = buffer.len().checked_sub(start).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "owned chunk start exceeds its length"))?;
+        let bytes = buffer.len().checked_sub(start).ok_or_else(|| io::Error::new(ErrorKind::InvalidInput, "owned chunk start exceeds its length"))?;
         self.record(bytes);
         Ok(())
     }

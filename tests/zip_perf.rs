@@ -1,3 +1,4 @@
+use std::path::Path;
 #[allow(dead_code, unused_imports)]
 mod common;
 mod support;
@@ -40,7 +41,7 @@ impl Fixture {
         Self { directory, input, contents, chunk_size, shape }
     }
 
-    fn verify(&self, output: &std::path::Path) {
+    fn verify(&self, output: &Path) {
         match self.shape {
             Shape::Single => assert_eq!(fs::read(output.join("payload.bin")).unwrap(), self.contents),
             Shape::Many => {
@@ -52,13 +53,13 @@ impl Fixture {
     }
 }
 
-fn fbz_command(input: &std::path::Path, output: &std::path::Path) -> Command {
+fn fbz_command(input: &Path, output: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_fbz"));
     command.args(["-q", "-P", &requested_threads().to_string(), "-C"]).arg(output).arg(input);
     command
 }
 
-fn unzip_command(input: &std::path::Path, output: &std::path::Path) -> Command {
+fn unzip_command(input: &Path, output: &Path) -> Command {
     let mut command = Command::new("unzip");
     command.args(["-qq"]).arg(input).args(["-d"]).arg(output);
     command

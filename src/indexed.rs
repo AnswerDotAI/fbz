@@ -1,3 +1,4 @@
+use io::ErrorKind;
 use std::{collections::{HashMap, VecDeque}, io::{self, Read, Seek, SeekFrom}, path::Path};
 
 use crate::{DecodeOptions, Error, Index, Result, Source, build_index, decode_block};
@@ -64,9 +65,9 @@ impl Read for IndexedReader {
     fn read(&mut self, mut output: &mut [u8]) -> io::Result<usize> {
         let requested = output.len();
         while !output.is_empty() && self.position < self.index.decoded_len {
-            let number = self.block_number(self.position).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "index has a decoded gap"))?;
+            let number = self.block_number(self.position).ok_or_else(|| io::Error::new(ErrorKind::InvalidData, "index has a decoded gap"))?;
             let count = self.read_block_part(number, output).map_err(io::Error::other)?;
-            if count == 0 { return Err(io::Error::new(io::ErrorKind::InvalidData, "decoder made no progress")); }
+            if count == 0 { return Err(io::Error::new(ErrorKind::InvalidData, "decoder made no progress")); }
             self.position += count as u64;
             output = &mut output[count..];
         }
@@ -80,9 +81,7 @@ impl Seek for IndexedReader {
             SeekFrom::Start(position) => i128::from(position), SeekFrom::Current(offset) => i128::from(self.position) + i128::from(offset),
             SeekFrom::End(offset) => i128::from(self.index.decoded_len) + i128::from(offset)
         };
-        if !(0..=i128::from(self.index.decoded_len)).contains(&next) {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "seek outside decompressed data"));
-        }
+        if !(0..=i128::from(self.index.decoded_len)).contains(&next) { return Err(io::Error::new(ErrorKind::InvalidInput, "seek outside decompressed data")); }
         self.position = next as u64;
         Ok(self.position)
     }

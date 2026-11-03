@@ -1,11 +1,13 @@
+use fs::Metadata;
+use io::ErrorKind;
 use std::{fs, io, path::{Path, PathBuf}};
 
 use fbz::{Error, Result};
 use tempfile::TempDir;
 
-fn path_metadata(path: &Path) -> io::Result<Option<fs::Metadata>> {
+fn path_metadata(path: &Path) -> io::Result<Option<Metadata>> {
     match fs::symlink_metadata(path) {
-        Ok(metadata) => Ok(Some(metadata)), Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None), Err(error) => Err(error)
+        Ok(metadata) => Ok(Some(metadata)), Err(error) if error.kind() == ErrorKind::NotFound => Ok(None), Err(error) => Err(error)
     }
 }
 
@@ -15,10 +17,10 @@ fn children(path: &Path) -> io::Result<Vec<PathBuf>> {
     Ok(result)
 }
 
-fn existing_error(path: &Path) -> Error { Error::Io(io::Error::new(io::ErrorKind::AlreadyExists, format!("{} already exists (use --force)", path.display()))) }
+fn existing_error(path: &Path) -> Error { Error::Io(io::Error::new(ErrorKind::AlreadyExists, format!("{} already exists (use --force)", path.display()))) }
 
 fn directory_collision(path: &Path) -> Error {
-    Error::Io(io::Error::new(io::ErrorKind::AlreadyExists, format!("refusing to replace directory {} with an archive entry", path.display())))
+    Error::Io(io::Error::new(ErrorKind::AlreadyExists, format!("refusing to replace directory {} with an archive entry", path.display())))
 }
 
 fn preflight(source: &Path, target: &Path, overwrite: bool) -> Result<()> {
@@ -33,13 +35,13 @@ fn preflight(source: &Path, target: &Path, overwrite: bool) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn make_directory_mutable(path: &Path, metadata: &fs::Metadata) -> io::Result<()> {
+fn make_directory_mutable(path: &Path, metadata: &Metadata) -> io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(path, fs::Permissions::from_mode(metadata.permissions().mode() | 0o700))
 }
 
 #[cfg(not(unix))]
-fn make_directory_mutable(path: &Path, metadata: &fs::Metadata) -> io::Result<()> {
+fn make_directory_mutable(path: &Path, metadata: &Metadata) -> io::Result<()> {
     let mut permissions = metadata.permissions();
     permissions.set_readonly(false);
     fs::set_permissions(path, permissions)
@@ -65,7 +67,7 @@ pub(super) fn staging(destination: &Path) -> Result<TempDir> {
     let parent = match path_metadata(destination)? {
         Some(metadata) if metadata.is_dir() => destination,
         Some(_) => {
-            return Err(Error::Io(io::Error::new(io::ErrorKind::NotADirectory, format!("{} is not a directory", destination.display()))));
+            return Err(Error::Io(io::Error::new(ErrorKind::NotADirectory, format!("{} is not a directory", destination.display()))));
         }
         None => destination.parent().filter(|path| !path.as_os_str().is_empty()).unwrap_or_else(|| Path::new(".")),
     };

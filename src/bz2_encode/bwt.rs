@@ -10,6 +10,7 @@
 //! preceding byte, so the last column — and therefore the transform — is
 //! unaffected.
 
+use core::cmp::Ordering;
 use std::vec;
 use std::vec::Vec;
 
@@ -119,9 +120,7 @@ fn classify(s: &[u32]) -> Vec<bool> {
     let mut types = vec![false; n];
     types[n - 1] = true;
     for i in (0..n - 1).rev() {
-        types[i] = match s[i].cmp(&s[i + 1]) {
-            core::cmp::Ordering::Less => true, core::cmp::Ordering::Greater => false, core::cmp::Ordering::Equal => types[i + 1]
-        };
+        types[i] = match s[i].cmp(&s[i + 1]) { Ordering::Less => true, Ordering::Greater => false, Ordering::Equal => types[i + 1] };
     }
     types
 }

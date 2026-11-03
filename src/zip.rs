@@ -1,5 +1,7 @@
 //! ZIP archive creation using fbz's raw-DEFLATE encoder.
 
+use fs::{File, Metadata};
+use std::path::Component;
 use std::{fs, io::{self, Write}, path::{Path, PathBuf}, time::UNIX_EPOCH};
 
 use rayon::ThreadPoolBuilder;
@@ -34,7 +36,7 @@ pub struct EncodeReport { pub entries: usize, pub input_len: u64, pub output_len
 fn invalid(message: impl Into<String>) -> Error { Error::InvalidZip(message.into()) }
 
 #[cfg(unix)]
-fn mode(metadata: &fs::Metadata) -> u32 {
+fn mode(metadata: &Metadata) -> u32 {
     use std::os::unix::fs::{FileTypeExt, PermissionsExt};
     let kind = if metadata.file_type().is_symlink() { 0o120000 }
     else if metadata.is_dir() { 0o040000 }
@@ -45,9 +47,9 @@ fn mode(metadata: &fs::Metadata) -> u32 {
 }
 
 #[cfg(not(unix))]
-fn mode(metadata: &fs::Metadata) -> u32 { if metadata.is_dir() { 0o040755 } else { 0o100644 } }
+fn mode(metadata: &Metadata) -> u32 { if metadata.is_dir() { 0o040755 } else { 0o100644 } }
 
-fn modified(metadata: &fs::Metadata) -> Option<u32> { metadata.modified().ok()?.duration_since(UNIX_EPOCH).ok()?.as_secs().try_into().ok() }
+fn modified(metadata: &Metadata) -> Option<u32> { metadata.modified().ok()?.duration_since(UNIX_EPOCH).ok()?.as_secs().try_into().ok() }
 
 #[cfg(unix)]
 fn symlink_bytes(path: &Path) -> Result<Vec<u8>> { use std::os::unix::ffi::OsStrExt; Ok(fs::read_link(path)?.as_os_str().as_bytes().to_vec()) }
@@ -59,8 +61,8 @@ fn zip_name(path: &Path, directory: bool) -> Result<String> {
     let mut parts = Vec::new();
     for component in path.components() {
         match component {
-            std::path::Component::Normal(part) => parts.push(part.to_str().ok_or_else(|| invalid(format!("ZIP path {} is not UTF-8", path.display())))?),
-            std::path::Component::CurDir => {} _ => return Err(invalid(format!("unsafe ZIP path {}", path.display())))
+            Component::Normal(part) => parts.push(part.to_str().ok_or_else(|| invalid(format!("ZIP path {} is not UTF-8", path.display())))?),
+            Component::CurDir => {} _ => return Err(invalid(format!("unsafe ZIP path {}", path.display())))
         }
     }
     if parts.is_empty() { return Err(invalid("empty ZIP path")); }
@@ -227,7 +229,7 @@ fn write_large<W: Write>(output: &mut CountingWriter<W>, entry: Entry, options: 
     let local_offset = output.position;
     write_local_header(output, &entry, METHOD_DEFLATE, zip64)?;
     let compressed_start = output.position;
-    let mut source = fs::File::open(&entry.source)?;
+    let mut source = File::open(&entry.source)?;
     let report = deflate::compress_to_writer(&mut source, output, options)?;
     let compressed_size = output.position - compressed_start;
     write_descriptor(output, report.crc, compressed_size, report.input_len, zip64)?;

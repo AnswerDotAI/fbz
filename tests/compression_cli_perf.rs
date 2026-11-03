@@ -4,7 +4,7 @@ mod support;
 
 use std::{fs, path::{Path, PathBuf}, process::{Command, Stdio}};
 
-fn input_file(directory: &tempfile::TempDir) -> std::path::PathBuf {
+fn input_file(directory: &tempfile::TempDir) -> PathBuf {
     let path = directory.path().join("simplewiki-prefix.xml");
     fs::write(&path, support::simplewiki_prefix()).unwrap();
     path
