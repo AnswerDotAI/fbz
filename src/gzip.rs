@@ -97,6 +97,7 @@ pub fn decompress(data: &[u8]) -> Result<Vec<u8>> { decompress_with_options(data
 
 pub fn decompress_with_options(data: &[u8], options: DecodeOptions) -> Result<Vec<u8>> {
     let mut output = Vec::new();
+    if data.len() >= OUTPUT_CHUNK { output.reserve_exact(data.len()); }
     decompress_to_writer_with_options(data, &mut output, options)?;
     Ok(output)
 }
@@ -425,11 +426,9 @@ fn decompress_deflate_stream(
     let DeflateStream { start_byte, end_byte, member, decoded_base } = stream;
     let data = data.get(..end_byte).ok_or_else(|| invalid("DEFLATE end exceeds input"))?;
     if start_byte > end_byte { return Err(invalid("DEFLATE start exceeds end")); }
-    let threads = options.resolved_threads();
+    let threads = if end_byte - start_byte < MIN_PARALLEL_INPUT || options.memory_limit < PARALLEL_JOB_MEMORY { 1 } else { options.resolved_threads() };
     options.threads = threads;
-    if threads == 1 || end_byte - start_byte < MIN_PARALLEL_INPUT || options.memory_limit < PARALLEL_JOB_MEMORY {
-        return decompress_deflate_serial_stream(data, start_byte, output, member, decoded_base, progress);
-    }
+    if threads == 1 { return decompress_deflate_serial_stream(data, start_byte, output, member, decoded_base, progress); }
     let first_grid = start_byte.saturating_add(PARALLEL_GRID);
     let initial_segment = match decode_segment(data, start_byte * 8, first_grid.min(end_byte) * 8, InitialHistory::Empty, PARALLEL_OUTPUT_LIMIT) {
         Ok(segment) => segment, Err(_) => return decompress_deflate_serial_stream(data, start_byte, output, member, decoded_base, progress)
@@ -816,7 +815,8 @@ struct Emitter<'a, W> { output: &'a mut W, buffer: Vec<u8>, history_len: usize, 
 
 impl<'a, W: OutputSink> Emitter<'a, W> {
     fn new(output: &'a mut W, decoded_base: u64) -> Self {
-        Self { output, buffer: Vec::with_capacity(WINDOW_SIZE + OUTPUT_CHUNK + 258), history_len: 0, crc: Hasher::new(), member_decoded: 0, decoded_base }
+        // A flush can overshoot its target by a stored block, which is at most 64 KiB.
+        Self { output, buffer: Vec::with_capacity(HISTORY_COMPACT + 2 * OUTPUT_CHUNK), history_len: 0, crc: Hasher::new(), member_decoded: 0, decoded_base }
     }
 
     fn decoded_position(&self) -> u64 { self.decoded_base + self.member_decoded }
