@@ -14,7 +14,6 @@ rust-version = "1.91"
 license = "Apache-2.0"
 description = "Fast parallel compression and decompression for bzip2, gzip, LZ4, tar, and ZIP"
 repository = "https://github.com/AnswerDotAI/fbz"
-homepage = "https://github.com/AnswerDotAI/fbz"
 documentation = "https://docs.rs/fbz"
 include = ["/src/**", "/Cargo.toml", "/README.md", "/DEV.md", "/LICENSE"]
 
