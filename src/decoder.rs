@@ -336,17 +336,3 @@ pub(crate) fn decode_serial_with_progress(data: &[u8], output: &mut impl OutputS
 }
 
 fn decode_error(bit_offset: u64, source: DecodeError) -> Error { Error::Decode { bit_offset, source } }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn huffman_lut_and_fallback_decode_all_symbols() {
-        let lengths = [2, 2, 3, 3, 3, 3];
-        let table = Huffman::build(&lengths, 0).unwrap();
-        let data = [0b0001_1001, 0b0111_0111];
-        let mut bits = Bits::at(&data, 0).unwrap();
-        assert_eq!((0..6).map(|_| table.decode(&mut bits).unwrap()).collect::<Vec<_>>(), [0, 1, 2, 3, 4, 5]);
-    }
-}

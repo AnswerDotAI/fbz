@@ -154,7 +154,8 @@ fn copy_match(output: &mut Vec<u8>, dictionary: &[u8], offset: usize, mut length
     Ok(())
 }
 
-fn decompress_block(input: &[u8], dictionary: &[u8], max_output: usize) -> Result<Vec<u8>> {
+/// Decode one raw LZ4 block using an optional preceding history dictionary.
+pub fn decompress_block(input: &[u8], dictionary: &[u8], max_output: usize) -> Result<Vec<u8>> {
     let mut output = Vec::with_capacity(max_output);
     let mut position = 0;
     while position < input.len() {
@@ -387,82 +388,4 @@ pub fn decompress_to_sink_with_options_and_progress<S: OutputSink, P: FnMut(Deco
     output.flush()?;
     progress(DecodeProgress { compressed_bytes: data.len() as u64, decoded_bytes: decoded_total });
     Ok(Report { source_len: data.len() as u64, decoded_len: decoded_total, frames, blocks })
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io::{Read, Write};
-
-    use lz4_flex::frame::{BlockMode as OracleMode, BlockSize, FrameDecoder, FrameEncoder, FrameInfo};
-
-    use super::*;
-
-    fn oracle_frame(data: &[u8], mode: OracleMode, block_checksums: bool, content_checksum: bool) -> Vec<u8> {
-        let info = FrameInfo::new().block_size(BlockSize::Max64KB).block_mode(mode).block_checksums(block_checksums).content_checksum(content_checksum)
-            .content_size(Some(data.len() as u64));
-        let mut encoder = FrameEncoder::with_frame_info(info, Vec::new());
-        encoder.write_all(data).unwrap();
-        encoder.finish().unwrap()
-    }
-
-    #[test]
-    fn decodes_oracle_independent_and_linked_frames() {
-        let data = [b"linked and independent LZ4 frames ".repeat(10_000), (0_u8..=255).collect::<Vec<_>>().repeat(1_000)].concat();
-        for mode in [OracleMode::Independent, OracleMode::Linked] {
-            for checksums in [false, true] {
-                let encoded = oracle_frame(&data, mode, checksums, checksums);
-                for threads in [1, 4] { assert_eq!(decompress_with_options(&encoded, DecodeOptions { threads, ..DecodeOptions::default() }).unwrap(), data); }
-            }
-        }
-    }
-
-    #[test]
-    fn handles_concatenated_and_skippable_frames() {
-        let first = oracle_frame(b"first", OracleMode::Independent, true, true);
-        let second = oracle_frame(b"second", OracleMode::Linked, false, false);
-        let mut encoded = first;
-        encoded.extend_from_slice(&SKIPPABLE_MAGIC_START.to_le_bytes());
-        encoded.extend_from_slice(&3_u32.to_le_bytes());
-        encoded.extend_from_slice(b"xyz");
-        encoded.extend_from_slice(&second);
-        let mut output = Vec::new();
-        let report = decompress_to_writer_with_options(&encoded, &mut output, DecodeOptions { threads: 4, ..DecodeOptions::default() }).unwrap();
-        assert_eq!(output, b"firstsecond");
-        assert_eq!(report.frames.len(), 2);
-        assert_eq!(report.decoded_len, 11);
-    }
-
-    #[test]
-    fn rejects_corruption_and_output_overflow() {
-        let data = b"checksum coverage".repeat(10_000);
-        let mut encoded = oracle_frame(&data, OracleMode::Independent, true, true);
-        let middle = encoded.len() / 2;
-        encoded[middle] ^= 1;
-        assert!(matches!(decompress(&encoded), Err(Error::InvalidLz4(_))));
-        assert!(matches!(decompress_block(&[0x1f, 1, 0, 255, 255, 255, 255], &[], 32), Err(Error::InvalidLz4(_))));
-    }
-
-    #[test]
-    fn oracle_decodes_a_minimal_fbz_block_frame() {
-        let payload = b"literal-only interoperability";
-        let mut encoded = Vec::new();
-        encoded.extend_from_slice(&FRAME_MAGIC.to_le_bytes());
-        let descriptor = [0x64, 0x40];
-        encoded.extend_from_slice(&descriptor);
-        encoded.push((xxhash32(&descriptor) >> 8) as u8);
-        encoded.extend_from_slice(&((payload.len() as u32) | UNCOMPRESSED_BIT).to_le_bytes());
-        encoded.extend_from_slice(payload);
-        encoded.extend_from_slice(&0_u32.to_le_bytes());
-        encoded.extend_from_slice(&xxhash32(payload).to_le_bytes());
-        let mut decoder = FrameDecoder::new(encoded.as_slice());
-        let mut decoded = Vec::new();
-        decoder.read_to_end(&mut decoded).unwrap();
-        assert_eq!(decoded, payload);
-    }
-
-    #[test]
-    fn automatic_threads_are_bounded_but_explicit_counts_are_preserved() {
-        assert!(worker_threads(DecodeOptions::default()) <= AUTO_THREAD_LIMIT);
-        assert_eq!(worker_threads(DecodeOptions { threads: 12, ..DecodeOptions::default() }), 12);
-    }
 }

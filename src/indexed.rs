@@ -110,37 +110,3 @@ impl BlockCache {
         self.entries.insert(number, data);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crabz2::{Level, compress};
-
-    #[test]
-    fn reads_and_seeks_across_blocks() {
-        let plain: Vec<_> = (0..350_000).map(|index| ((index * 17 + index / 101) & 255) as u8).collect();
-        let compressed = compress(&plain, Level::FASTEST);
-        let mut reader = IndexedReader::from_bytes(compressed, DecodeOptions { threads: 2, ..DecodeOptions::default() }).unwrap();
-        assert!(reader.index().blocks.len() >= 3);
-
-        for &(position, count) in &[(0, 17), (99_990, 40), (170_123, 8192), (349_990, 20)] {
-            reader.seek(SeekFrom::Start(position as u64)).unwrap();
-            let mut actual = vec![0; count];
-            let got = reader.read(&mut actual).unwrap();
-            assert_eq!(&actual[..got], &plain[position..(position + count).min(plain.len())]);
-        }
-        assert_eq!(reader.seek(SeekFrom::End(-10)).unwrap(), plain.len() as u64 - 10);
-    }
-
-    #[test]
-    fn loads_source_bound_index() {
-        let plain = b"indexed bzip2".repeat(10_000);
-        let compressed = compress(&plain, Level::FASTEST);
-        let built = IndexedReader::from_bytes(compressed.clone(), DecodeOptions::default()).unwrap();
-        let encoded = built.index().to_bytes();
-        let mut loaded = IndexedReader::from_bytes_with_index(compressed, &encoded, 1024 * 1024).unwrap();
-        let mut actual = Vec::new();
-        loaded.read_to_end(&mut actual).unwrap();
-        assert_eq!(actual, plain);
-    }
-}

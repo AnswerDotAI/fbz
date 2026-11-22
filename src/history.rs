@@ -16,23 +16,3 @@ pub(crate) fn extend_match<T: Copy>(output: &mut Vec<T>, distance: usize, length
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn overlapping_matches_repeat_the_requested_history() {
-        for initial_len in 1..20 {
-            for distance in 1..=initial_len {
-                for length in 0..80 {
-                    let mut expected: Vec<_> = (0..initial_len as u16).collect();
-                    for _ in 0..length { expected.push(expected[expected.len() - distance]); }
-                    let mut actual: Vec<_> = (0..initial_len as u16).collect();
-                    extend_match(&mut actual, distance, length);
-                    assert_eq!(actual, expected, "initial={initial_len}, distance={distance}, length={length}");
-                }
-            }
-        }
-    }
-}

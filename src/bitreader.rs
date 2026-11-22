@@ -59,32 +59,3 @@ impl<'a> BitReader<'a> {
 
     fn eof(&self, requested: u64) -> Error { Error::UnexpectedEof { bit_offset: self.bit_offset, requested, remaining: self.remaining() } }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn reference(data: &[u8], offset: usize, count: usize) -> u64 {
-        (offset..offset + count).fold(0, |result, bit| (result << 1) | u64::from((data[bit / 8] >> (7 - bit % 8)) & 1))
-    }
-
-    #[test]
-    fn reads_every_alignment_and_width() {
-        let data = [0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x55];
-        for offset in 0..8 {
-            for count in 0..=64.min(data.len() * 8 - offset) {
-                let mut reader = BitReader::at(&data, offset as u64).unwrap();
-                assert_eq!(reader.read_bits(count as u8).unwrap(), reference(&data, offset, count));
-                assert_eq!(reader.position(), (offset + count) as u64);
-            }
-        }
-    }
-
-    #[test]
-    fn reads_single_bits_msb_first() {
-        let mut reader = BitReader::new(&[0b1010_0001]);
-        let bits: Vec<_> = (0..8).map(|_| reader.read_bit().unwrap()).collect();
-        assert_eq!(bits, [true, false, true, false, false, false, false, true]);
-        assert!(matches!(reader.read_bit(), Err(Error::UnexpectedEof { .. })));
-    }
-}

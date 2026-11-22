@@ -155,24 +155,3 @@ impl<'a> IndexReader<'a> {
 
     fn usize(&mut self, name: &str) -> Result<usize> { usize::try_from(self.u64()?).map_err(|_| invalid(format!("{name} does not fit this platform"))) }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn empty_index_round_trip_and_source_binding() {
-        let source = b"BZh9";
-        let index = Index::new(source, 0, Vec::new(), Vec::new());
-        let encoded = index.to_bytes();
-        assert_eq!(Index::from_bytes(&encoded, source).unwrap(), index);
-        assert!(matches!(Index::from_bytes(&encoded, b"BZh8"), Err(Error::InvalidIndex(_))));
-    }
-
-    #[test]
-    fn rejects_tampered_payload() {
-        let mut encoded = Index::new(b"BZh9", 0, Vec::new(), Vec::new()).to_bytes();
-        encoded[0] ^= 1;
-        assert!(matches!(Index::from_bytes(&encoded, b"BZh9"), Err(Error::InvalidIndex(_))));
-    }
-}

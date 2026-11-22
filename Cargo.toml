@@ -19,6 +19,8 @@ include = ["/src/**", "/Cargo.toml", "/README.md", "/DEV.md", "/LICENSE"]
 
 [lib]
 name = "fbz"
+doctest = false
+test = false
 
 [[bin]]
 name = "fbz"

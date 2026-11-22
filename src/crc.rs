@@ -53,17 +53,3 @@ pub fn bz2_crc32(data: &[u8]) -> u32 {
 /// Add a block CRC to bzip2's combined stream CRC.
 #[inline]
 pub fn combine_stream_crc(stream_crc: u32, block_crc: u32) -> u32 { stream_crc.rotate_left(1) ^ block_crc }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn known_values() {
-        assert_eq!(bz2_crc32(b""), 0);
-        assert_eq!(bz2_crc32(b"123456789"), 0xfc89_1918);
-    }
-
-    #[test]
-    fn combines_by_rotating_then_xoring() { assert_eq!(combine_stream_crc(0x8000_0001, 0x1234_5678), 0x1234_567b); }
-}

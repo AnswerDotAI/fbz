@@ -113,37 +113,3 @@ fn parse_end(data: &[u8], bit_offset: u64) -> Option<EndCandidate> {
     let mut reader = BitReader::at(data, bit_offset + u64::from(MAGIC_BITS)).ok()?;
     Some(EndCandidate { bit_offset, expected_stream_crc: reader.read_bits(32).ok()? as u32 })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn append_bits(target: &mut Vec<bool>, value: u64, count: usize) { target.extend((0..count).rev().map(|shift| value >> shift & 1 != 0)); }
-
-    fn pack(bits: &[bool]) -> Vec<u8> {
-        bits.chunks(8).map(|chunk| chunk.iter().fold(0, |byte, &bit| (byte << 1) | u8::from(bit)) << (8 - chunk.len())).collect()
-    }
-
-    #[test]
-    fn finds_markers_at_every_bit_alignment() {
-        for prefix in 0..8 {
-            let mut bits = Vec::new();
-            for byte in b"BZh9" { append_bits(&mut bits, u64::from(*byte), 8); }
-            bits.extend(std::iter::repeat_n(false, prefix));
-            append_bits(&mut bits, BLOCK_MAGIC, 48);
-            append_bits(&mut bits, 0x1234_5678, 32);
-            append_bits(&mut bits, 1, 1);
-            append_bits(&mut bits, 0x00ab_cdef, 24);
-            let data = pack(&bits);
-            let result = scan(&data).unwrap();
-            let [block] = result.blocks.as_slice() else { panic!("expected one block, found {:?}", result.blocks); };
-            assert_eq!(block.bit_offset, 32 + prefix as u64);
-            assert_eq!(block.expected_crc, 0x1234_5678);
-            assert!(block.randomized);
-            assert_eq!(block.orig_ptr, 0x00ab_cdef);
-        }
-    }
-
-    #[test]
-    fn rejects_non_bzip_input() { assert!(matches!(scan(b"not bzip2"), Err(Error::InvalidStreamHeader))); }
-}

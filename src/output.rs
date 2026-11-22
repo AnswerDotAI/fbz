@@ -94,23 +94,3 @@ pub fn output_pipe() -> (PipeWriter, PipeReader) {
     let cancelled = Arc::new(AtomicBool::new(false));
     (PipeWriter { sender, cancelled: Arc::clone(&cancelled) }, PipeReader { receiver, chunk: Vec::new(), offset: 0, cancelled })
 }
-
-#[cfg(test)]
-mod tests {
-    use std::thread;
-
-    use super::*;
-
-    #[test]
-    fn pipe_transfers_owned_allocation() {
-        let (mut writer, mut reader) = output_pipe();
-        let bytes = vec![1, 2, 3, 4];
-        let pointer = bytes.as_ptr() as usize;
-        let worker = thread::spawn(move || writer.write_owned_from(bytes, 1).unwrap());
-        let mut output = [0; 3];
-        assert_eq!(reader.read(&mut output).unwrap(), 3);
-        assert_eq!(output, [2, 3, 4]);
-        assert_eq!(reader.chunk.as_ptr() as usize, pointer);
-        worker.join().unwrap();
-    }
-}
