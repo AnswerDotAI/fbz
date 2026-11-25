@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.13,<2.0", "fastws-cli>=0.0.29"]
+requires = ["maturin>=1.13,<2.0", "fastws-cli>=0.0.42"]
 build-backend = "fastws.build_backend"
 
 [project]
@@ -16,7 +16,8 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["fastws-cli>=0.0.29", "fastship>=0.1.8", "maturin>=1.13,<2.0", "pytest"]
+test = ["fastws-cli>=0.0.42", "pytest"]
+dev = ["fastship>=0.1.8", "maturin>=1.13,<2.0", "fbz[test]"]
 
 [project.urls]
 Homepage = "https://github.com/AnswerDotAI/fbz"
@@ -34,6 +35,7 @@ cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "py
 
 [tool.fastws]
 native-binaries = true
+dev-profile = "release"
 
 [tool.fastship]
 branch = "main"

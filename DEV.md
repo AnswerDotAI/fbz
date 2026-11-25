@@ -78,14 +78,14 @@ The bzip2 decoder is safe scalar Rust designed for LLVM auto-vectorisation. Huff
 
 ```bash
 cargo develop
-cargo test
+cargo test --release
 cargo check
 cargo package -p fbz
 pytest -q
 ship-rs-build
 ```
 
-The published `fbz` crate has no Python dependency. The unpublished `fbz-py` crate in `py/` builds the extension. `cargo develop` installs the extension and native CLI into the active venv using the same Cargo profile as bare `cargo test`. The shared `fastws.build_backend` stages native executables for wheel builds.
+The published `fbz` crate has no Python dependency. The unpublished `fbz-py` crate in `py/` builds the extension. `cargo develop` installs the extension and native CLI into the active venv using the `release` profile (`[tool.fastws] dev-profile = "release"`), sharing `target/release/` with `cargo build --release` and `cargo test --release`. The shared `fastws.build_backend` stages native executables for wheel builds.
 
 Run `cargo fastfmt` after Rust edits and `chkstyle` after Python edits once tests pass.
 
@@ -374,7 +374,7 @@ The thin PEP 517 backend delegates to Maturin after building and staging the nat
 
 ## Release
 
-1. Run `cargo develop`, `cargo test`, and `pytest -q`.
+1. Run `cargo develop`, `cargo test --release`, and `pytest -q`.
 2. Build distributable wheels with `ship-rs-build --profile dist` (or `cargo stage --profile dist` followed by `maturin build --profile dist`).
 3. Confirm the release version in `Cargo.toml` (`[workspace.package].version`).
 4. For the first crates.io release only, run `cargo publish -p fbz`, then configure the `ci.yml` trusted publisher for `AnswerDotAI/fbz`; crates.io requires the crate to exist before trusted publishing can be configured.
