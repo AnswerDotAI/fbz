@@ -24,6 +24,7 @@ Homepage = "https://github.com/AnswerDotAI/fbz"
 Repository = "https://github.com/AnswerDotAI/fbz"
 Issues = "https://github.com/AnswerDotAI/fbz/issues"
 
+Documentation = "https://AnswerDotAI.github.io/fbz/"
 [tool.maturin]
 manifest-path = "py/Cargo.toml"
 python-source = "python"
